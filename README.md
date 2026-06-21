@@ -5,11 +5,11 @@ A personal expense tracker PWA built for iPhone. Tracks monthly bills — credit
 ## Features
 
 - Google login — data syncs across any browser or device
+- Face ID lock screen (optional) — biometric unlock via WebAuthn
 - Month-by-month expense view with animated total and remaining balance
 - Due date per expense — list sorted by due day, remaining vs paid color-coded
 - Recurring expenses auto-copied when you navigate to a new month
 - Analytics view — category breakdown with animated bar chart and 6-month trend
-- 4-digit PIN lock (optional, stored per account)
 - Export to CSV (iOS share sheet) or JSON backup
 - Import JSON backup — for migrating old local data into your account
 - Fully offline after first load (PWA, service worker)
@@ -26,7 +26,15 @@ Data is tied to your **Google account** via Firebase Auth + Firestore:
 
 Each user's data lives at `users/{uid}/*` in Firestore with security rules that prevent cross-user access.
 
-The PIN is an optional local access control layer on top of Google login — stored in your Firestore account, not just the device.
+## Face ID
+
+Uses the Web Authentication API (WebAuthn/Passkeys). Device-specific — credential lives in the iOS Secure Enclave.
+
+- Enable: Settings → Security → **Enable Face ID**
+- App shows biometric lock screen on every open until you disable it
+- If Face ID fails, tap "Sign out" to re-authenticate with Google
+
+Note: Face ID credential is per-device. Enabling on iPhone does not affect other devices.
 
 ## Tech stack
 
@@ -34,6 +42,7 @@ The PIN is an optional local access control layer on top of Google login — sto
 - Tailwind CSS
 - Firebase Auth (Google OAuth)
 - Firebase Firestore (cloud database)
+- Web Authentication API (WebAuthn — Face ID)
 - Recharts (analytics)
 - Anime.js v4 (animations)
 - vite-plugin-pwa (service worker + offline)
@@ -66,8 +75,6 @@ Add all 6 `VITE_FIREBASE_*` env vars in Vercel project settings, then:
 vercel build --prod
 vercel deploy --prebuilt --prod
 ```
-
-Builds locally to avoid remote npm install issues with cutting-edge deps (Vite v8, TS 6, React 19).
 
 Also add your Vercel domain to Firebase → Authentication → Settings → Authorized domains.
 
