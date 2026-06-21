@@ -78,7 +78,7 @@ export default function ExpenseList({ expenses, month, onTap }: Props) {
             }`}
           >
             <div>
-              <p className={`text-sm font-medium tracking-tight ${isPaid ? 'text-gray-400' : 'text-gray-700'}`}>
+              <p className="text-sm font-medium tracking-tight text-gray-700">
                 {expense.label}
               </p>
               <p className="text-xs text-gray-400 mt-0.5 tracking-tight">
@@ -89,7 +89,7 @@ export default function ExpenseList({ expenses, month, onTap }: Props) {
               </p>
             </div>
             <span className={`text-sm font-semibold ml-4 tabular-nums tracking-tight ${
-              isPaid ? 'text-gray-300 line-through' : isRemaining ? 'text-orange-500' : 'text-gray-700'
+              isPaid ? 'text-green-500' : isRemaining ? 'text-orange-500' : 'text-gray-700'
             }`}>
               ${expense.amount.toFixed(2)}
             </span>
