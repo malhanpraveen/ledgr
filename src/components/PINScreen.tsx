@@ -53,6 +53,8 @@ export default function PINScreen({ mode, onVerify, onSuccess, onCancel }: PINSc
       if (step === 'enter') {
         setStep('confirm')
         setConfirmDigits('')
+        // Focus synchronously while still inside the user-gesture chain (iOS requires this)
+        inputRef.current?.focus()
         return
       }
 
@@ -60,6 +62,7 @@ export default function PINScreen({ mode, onVerify, onSuccess, onCancel }: PINSc
       if (pin !== digits) {
         triggerShake()
         setConfirmDigits('')
+        inputRef.current?.focus()
         return
       }
       onSuccess(pin)
@@ -100,7 +103,8 @@ export default function PINScreen({ mode, onVerify, onSuccess, onCancel }: PINSc
         onChange={handleChange}
         autoComplete="off"
         autoCorrect="off"
-        className="absolute opacity-0 w-0 h-0"
+        className="absolute opacity-0 w-px h-px pointer-events-none"
+        style={{ fontSize: 16 }}
         aria-label={title}
       />
 
