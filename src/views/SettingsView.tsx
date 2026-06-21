@@ -13,6 +13,7 @@ export default function SettingsView() {
   const [newCategory, setNewCategory] = useState('')
   const [pinMode, setPinMode] = useState<PinMode>(null)
   const [exporting, setExporting] = useState(false)
+  const [adding, setAdding] = useState(false)
 
   async function handleExport() {
     setExporting(true)
@@ -26,16 +27,35 @@ export default function SettingsView() {
 
   async function handleAddCategory() {
     const name = newCategory.trim()
-    if (!name) return
-    await addCategory(name)
-    setNewCategory('')
+    if (!name || adding) return
+    setAdding(true)
+    try {
+      await addCategory(name)
+      setNewCategory('')
+    } finally {
+      setAdding(false)
+    }
+  }
+
+  async function handleRemovePin() {
+    try {
+      await removePin()
+    } catch {
+      alert('Failed to remove PIN. Try again.')
+    }
   }
 
   if (pinMode) {
     return (
       <PINScreen
         mode={pinMode}
-        onSuccess={async (pin) => { await setPin(pin); setPinMode(null) }}
+        onSuccess={async (pin) => {
+          try {
+            await setPin(pin)
+          } finally {
+            setPinMode(null)
+          }
+        }}
         onCancel={() => setPinMode(null)}
       />
     )
@@ -73,7 +93,8 @@ export default function SettingsView() {
           />
           <button
             onClick={handleAddCategory}
-            className="bg-blue-500 text-white px-4 py-2 rounded-xl font-semibold"
+            disabled={adding}
+            className="bg-blue-500 text-white px-4 py-2 rounded-xl font-semibold disabled:opacity-50"
           >
             Add
           </button>
@@ -100,7 +121,7 @@ export default function SettingsView() {
                 Change PIN
               </button>
               <button
-                onClick={removePin}
+                onClick={handleRemovePin}
                 className="w-full py-3 border border-red-300 text-red-400 rounded-xl font-semibold"
               >
                 Remove PIN
