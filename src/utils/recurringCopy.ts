@@ -10,10 +10,6 @@ function prevMonth(month: string): string {
 }
 
 export async function copyRecurringExpenses(uid: string, month: string): Promise<void> {
-  const now = new Date()
-  const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
-  if (month > currentMonth) return
-
   const expensesCol = collection(firestore, 'users', uid, 'expenses')
 
   const existing = await getDocs(query(expensesCol, where('month', '==', month)))
