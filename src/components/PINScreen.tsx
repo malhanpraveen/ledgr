@@ -1,11 +1,8 @@
 import { useState, useRef, useEffect } from 'react'
 
-interface PINScreenProps {
-  mode: 'verify' | 'set'
-  onVerify?: (pin: string) => Promise<boolean>
-  onSuccess: (pin?: string) => void
-  onCancel?: () => void
-}
+type PINScreenProps =
+  | { mode: 'verify'; onVerify: (pin: string) => Promise<boolean>; onSuccess: () => void; onCancel?: () => void }
+  | { mode: 'set'; onVerify?: never; onSuccess: (pin: string) => void; onCancel?: () => void }
 
 export default function PINScreen({ mode, onVerify, onSuccess, onCancel }: PINScreenProps) {
   const [digits, setDigits] = useState<string[]>(['', '', '', ''])
@@ -13,6 +10,7 @@ export default function PINScreen({ mode, onVerify, onSuccess, onCancel }: PINSc
   const [step, setStep] = useState<'enter' | 'confirm'>('enter')
   const inputRefs = useRef<(HTMLInputElement | null)[]>([])
   const pinRowRef = useRef<HTMLDivElement>(null)
+  const isSubmitting = useRef(false)
 
   useEffect(() => {
     inputRefs.current[0]?.focus()
@@ -22,8 +20,11 @@ export default function PINScreen({ mode, onVerify, onSuccess, onCancel }: PINSc
   const setActiveDigits = step === 'confirm' ? setConfirmDigits : setDigits
 
   function triggerShake() {
+    const el = pinRowRef.current   // capture before async gap
+    if (!el) return
     import('animejs').then(({ animate }) => {
-      animate(pinRowRef.current!, {
+      if (!el) return
+      animate(el, {
         translateX: [0, -8, 8, -8, 8, 0],
         ease: 'inOutSine',
         duration: 400,
@@ -41,33 +42,38 @@ export default function PINScreen({ mode, onVerify, onSuccess, onCancel }: PINSc
   }
 
   async function handleComplete(pin: string) {
-    if (mode === 'verify') {
-      if (!onVerify) return
-      const ok = await onVerify(pin)
-      if (!ok) {
+    if (isSubmitting.current) return
+    isSubmitting.current = true
+    try {
+      if (mode === 'verify') {
+        if (!onVerify) return
+        const ok = await onVerify(pin)
+        if (!ok) {
+          triggerShake()
+          resetDigits()
+        } else {
+          onSuccess()
+        }
+        return
+      }
+
+      // mode === 'set'
+      if (step === 'enter') {
+        setStep('confirm')
+        return
+      }
+
+      // step === 'confirm'
+      if (pin !== digits.join('')) {
         triggerShake()
         resetDigits()
-      } else {
-        onSuccess()
+        return
       }
-      return
-    }
 
-    // mode === 'set'
-    if (step === 'enter') {
-      setStep('confirm')
-      return
+      onSuccess(pin)
+    } finally {
+      isSubmitting.current = false
     }
-
-    // step === 'confirm'
-    if (pin !== digits.join('')) {
-      triggerShake()
-      setConfirmDigits(['', '', '', ''])
-      setTimeout(() => inputRefs.current[0]?.focus(), 0)
-      return
-    }
-
-    onSuccess(pin)
   }
 
   function handleDigit(index: number, value: string) {

@@ -4,6 +4,7 @@ import { hashPin } from '../utils/hash'
 
 export function usePin() {
   const pinSetting = useLiveQuery(() => db.settings.get('pinHash'))
+  const isLoading = pinSetting === undefined   // undefined = query not yet resolved
   const hasPin = Boolean(pinSetting?.value)
 
   async function setPin(pin: string) {
@@ -21,5 +22,5 @@ export function usePin() {
     await db.settings.delete('pinHash')
   }
 
-  return { hasPin, setPin, verifyPin, removePin }
+  return { hasPin, isLoading, setPin, verifyPin, removePin }
 }

@@ -25,18 +25,21 @@ const TABS = [
 function MainShell() {
   const location = useLocation()
   const pageRef = useRef<HTMLElement>(null)
+  const pathname = location.pathname
 
   useEffect(() => {
-    if (!pageRef.current) return
+    const el = pageRef.current   // capture synchronously before async gap
+    if (!el) return
     import('animejs').then(({ animate }) => {
-      animate(pageRef.current!, {
+      if (!el) return              // check again inside .then() (el is from closure)
+      animate(el, {
         opacity: [0, 1],
         translateY: [8, 0],
         ease: 'outCubic',
         duration: 280,
       })
     })
-  }, [location.pathname])
+  }, [pathname])
 
   return (
     <div className="flex flex-col h-screen max-w-md mx-auto bg-white">
@@ -70,32 +73,11 @@ function MainShell() {
 }
 
 function AppContent() {
-  const { hasPin, setPin, verifyPin } = usePin()
+  const { hasPin, isLoading, setPin, verifyPin } = usePin()
   const [unlocked, setUnlocked] = useState(false)
-  const [offeringPinSetup, setOfferingPinSetup] = useState(false)
   const [settingPin, setSettingPin] = useState(false)
 
-  // useLiveQuery returns undefined while loading, then resolves to the value.
-  // hasPin is derived as Boolean(pinSetting?.value), so:
-  //   - undefined pinSetting => hasPin = false (but we can't distinguish loading vs no-pin yet)
-  // We need to track whether the query has resolved. useLiveQuery initializes to undefined.
-  // The hook returns hasPin: boolean (always), but pinSetting starts as undefined.
-  // We guard by checking if the liveQuery has fired — use a separate loading ref.
-
-  // Show loading until useLiveQuery fires (pinSetting will be undefined initially).
-  // Since usePin returns hasPin: boolean derived from pinSetting?.value,
-  // and pinSetting starts undefined, hasPin will be false on first render even if a PIN exists.
-  // We use a mounted + settled approach: after first render with a stable value we proceed.
-  const [pinChecked, setPinChecked] = useState(false)
-
-  useEffect(() => {
-    // We delay one tick to let useLiveQuery settle from its initial undefined state.
-    // This prevents flash of "no PIN" screen when a PIN actually exists.
-    const id = setTimeout(() => setPinChecked(true), 50)
-    return () => clearTimeout(id)
-  }, [])
-
-  if (!pinChecked) {
+  if (isLoading) {
     return (
       <div className="flex h-screen items-center justify-center text-gray-400">
         Loading...
@@ -103,8 +85,8 @@ function AppContent() {
     )
   }
 
-  // First launch: hasPin is false (no PIN stored), not unlocked yet, not offering setup
-  if (!hasPin && !unlocked && !offeringPinSetup && !settingPin) {
+  // First launch: no PIN stored, not yet unlocked, not actively setting a PIN
+  if (!hasPin && !unlocked && !settingPin) {
     return (
       <div className="flex flex-col items-center justify-center h-screen bg-white px-8">
         <h1 className="text-2xl font-bold mb-4 text-gray-800">Ledgr</h1>
@@ -112,10 +94,7 @@ function AppContent() {
           Set a 4-digit PIN to protect your data?
         </p>
         <button
-          onClick={() => {
-            setOfferingPinSetup(true)
-            setSettingPin(true)
-          }}
+          onClick={() => setSettingPin(true)}
           className="w-full bg-blue-500 text-white py-3 rounded-xl font-semibold mb-3"
         >
           Set PIN
@@ -136,13 +115,17 @@ function AppContent() {
       <PINScreen
         mode="set"
         onSuccess={async (pin) => {
-          if (pin) await setPin(pin)
-          setSettingPin(false)
-          setUnlocked(true)
+          if (!pin) return
+          try {
+            await setPin(pin)
+            setUnlocked(true)
+          } catch {
+            // IndexedDB write failed — unlock without PIN rather than leaving user stuck
+            setUnlocked(true)
+          }
         }}
         onCancel={() => {
           setSettingPin(false)
-          setOfferingPinSetup(false)
           setUnlocked(true)
         }}
       />
