@@ -1,10 +1,10 @@
-import Dexie, { type Table } from 'dexie'
+import Dexie, { type EntityTable } from 'dexie'
 import type { Expense, Category, Setting } from '../types'
 
 class ExpenseTrackerDB extends Dexie {
-  expenses!: Table<Expense>
-  categories!: Table<Category>
-  settings!: Table<Setting>
+  expenses!: EntityTable<Expense, 'id'>
+  categories!: EntityTable<Category, 'id'>
+  settings!: EntityTable<Setting, 'key'>
 
   constructor() {
     super('ExpenseTrackerDB')
@@ -27,8 +27,5 @@ const BUILT_IN_CATEGORIES: Category[] = [
 ]
 
 export async function seedCategories(): Promise<void> {
-  const count = await db.categories.count()
-  if (count === 0) {
-    await db.categories.bulkAdd(BUILT_IN_CATEGORIES)
-  }
+  await db.categories.bulkPut(BUILT_IN_CATEGORIES)
 }
