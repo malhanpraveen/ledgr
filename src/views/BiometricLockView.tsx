@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { useAuth } from '../hooks/useAuth'
 import { useBiometric } from '../hooks/useBiometric'
 
@@ -24,7 +24,6 @@ export default function BiometricLockView({ onUnlock }: Props) {
     }
   }
 
-  useEffect(() => { tryAuth() }, [])
 
   return (
     <div className="flex flex-col items-center justify-center h-screen bg-white px-8">
