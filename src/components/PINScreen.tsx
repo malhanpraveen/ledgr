@@ -1,49 +1,48 @@
-import { useState, useRef, useEffect } from 'react'
+import { useRef, useState, useEffect } from 'react'
 
 type PINScreenProps =
   | { mode: 'verify'; onVerify: (pin: string) => Promise<boolean>; onSuccess: () => void; onCancel?: () => void }
   | { mode: 'set'; onVerify?: never; onSuccess: (pin: string) => void; onCancel?: () => void }
 
 export default function PINScreen({ mode, onVerify, onSuccess, onCancel }: PINScreenProps) {
-  const [digits, setDigits] = useState('')           // step-1 PIN
-  const [confirmDigits, setConfirmDigits] = useState('')  // step-2 PIN
+  const [value, setValue] = useState('')       // current input
+  const [firstPin, setFirstPin] = useState('') // saved after step 1
   const [step, setStep] = useState<'enter' | 'confirm'>('enter')
+  const [error, setError] = useState('')
   const inputRef = useRef<HTMLInputElement>(null)
   const pinRowRef = useRef<HTMLDivElement>(null)
   const isSubmitting = useRef(false)
 
-  const active = step === 'confirm' ? confirmDigits : digits
-  const setActive = step === 'confirm' ? setConfirmDigits : setDigits
-
-  // Focus the hidden input immediately on mount and step change
   useEffect(() => {
-    // Small timeout ensures iOS honors focus after re-render
     const id = setTimeout(() => inputRef.current?.focus(), 50)
     return () => clearTimeout(id)
-  }, [step])
+  }, [])
 
   function triggerShake() {
     const el = pinRowRef.current
     if (!el) return
     import('animejs').then(({ animate }) => {
       if (!el) return
-      animate(el, {
-        translateX: [0, -8, 8, -8, 8, 0],
-        ease: 'inOutSine',
-        duration: 400,
-      })
+      animate(el, { translateX: [0, -8, 8, -8, 8, 0], ease: 'inOutSine', duration: 400 })
     })
   }
 
-  async function handleComplete(pin: string) {
-    if (isSubmitting.current) return
+  function handleChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const val = e.target.value.replace(/\D/g, '').slice(0, 4)
+    setValue(val)
+    setError('')
+  }
+
+  async function handleSubmit() {
+    if (value.length < 4 || isSubmitting.current) return
     isSubmitting.current = true
     try {
       if (mode === 'verify') {
-        const ok = await onVerify!(pin)
+        const ok = await onVerify!(value)
         if (!ok) {
           triggerShake()
-          setActive('')
+          setValue('')
+          setError('Incorrect PIN')
         } else {
           onSuccess()
         }
@@ -51,31 +50,27 @@ export default function PINScreen({ mode, onVerify, onSuccess, onCancel }: PINSc
       }
 
       if (step === 'enter') {
+        setFirstPin(value)
+        setValue('')
         setStep('confirm')
-        setConfirmDigits('')
-        // Focus synchronously while still inside the user-gesture chain (iOS requires this)
+        setError('')
+        // Focus stays on same input element — keyboard stays up
         inputRef.current?.focus()
         return
       }
 
       // confirm step
-      if (pin !== digits) {
+      if (value !== firstPin) {
         triggerShake()
-        setConfirmDigits('')
+        setValue('')
+        setError("PINs don't match — try again")
         inputRef.current?.focus()
         return
       }
-      onSuccess(pin)
+
+      onSuccess(value)
     } finally {
       isSubmitting.current = false
-    }
-  }
-
-  function handleChange(e: React.ChangeEvent<HTMLInputElement>) {
-    const val = e.target.value.replace(/\D/g, '').slice(0, 4)
-    setActive(val)
-    if (val.length === 4) {
-      void handleComplete(val)
     }
   }
 
@@ -83,6 +78,11 @@ export default function PINScreen({ mode, onVerify, onSuccess, onCancel }: PINSc
     mode === 'verify' ? 'Enter PIN'
     : step === 'confirm' ? 'Confirm PIN'
     : 'Set PIN'
+
+  const btnLabel =
+    mode === 'verify' ? 'Unlock'
+    : step === 'confirm' ? 'Confirm'
+    : 'Next'
 
   return (
     <div
@@ -92,14 +92,14 @@ export default function PINScreen({ mode, onVerify, onSuccess, onCancel }: PINSc
       <h1 className="text-2xl font-bold mb-2 text-gray-800">Ledgr</h1>
       <p className="text-gray-500 mb-8">{title}</p>
 
-      {/* Hidden input captures actual typing */}
+      {/* Hidden input — 1×1 so iOS can focus it; font-size 16 prevents zoom */}
       <input
         ref={inputRef}
         type="tel"
         inputMode="numeric"
         pattern="[0-9]*"
         maxLength={4}
-        value={active}
+        value={value}
         onChange={handleChange}
         autoComplete="off"
         autoCorrect="off"
@@ -108,21 +108,35 @@ export default function PINScreen({ mode, onVerify, onSuccess, onCancel }: PINSc
         aria-label={title}
       />
 
-      {/* Visual 4-dot display */}
-      <div ref={pinRowRef} className="flex gap-4 mb-8" onClick={() => inputRef.current?.focus()}>
+      {/* 4-dot display */}
+      <div ref={pinRowRef} className="flex gap-4 mb-4" onClick={() => inputRef.current?.focus()}>
         {Array.from({ length: 4 }, (_, i) => (
           <div
             key={i}
             className={`w-14 h-14 rounded-xl border-2 flex items-center justify-center text-2xl font-bold transition-colors ${
-              i < active.length
+              i < value.length
                 ? 'border-blue-500 bg-blue-50 text-blue-500'
                 : 'border-gray-300 text-gray-200'
             }`}
           >
-            {i < active.length ? '●' : '○'}
+            {i < value.length ? '●' : '○'}
           </div>
         ))}
       </div>
+
+      {error ? (
+        <p className="text-red-400 text-sm mb-4">{error}</p>
+      ) : (
+        <div className="mb-4 h-5" />
+      )}
+
+      <button
+        onClick={handleSubmit}
+        disabled={value.length < 4}
+        className="w-full py-3 bg-blue-500 text-white rounded-xl font-semibold disabled:opacity-30 mb-3"
+      >
+        {btnLabel}
+      </button>
 
       {onCancel && (
         <button onClick={onCancel} className="text-gray-400 text-sm">
