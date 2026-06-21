@@ -32,6 +32,7 @@ function shortMonthLabel(month: string): string {
 export default function AnalyticsView() {
   const [month, setMonth] = useState(currentMonthStr)
   const containerRef = useRef<HTMLDivElement>(null)
+  const animRef = useRef<{ cancel: () => void } | null>(null)
 
   const categoryData = useLiveQuery(async () => {
     const expenses = await db.expenses.where('month').equals(month).toArray()
@@ -55,10 +56,10 @@ export default function AnalyticsView() {
     )
   }, [month], [])
 
-  const hasData = categoryData && categoryData.length > 0
+  const hasData = (categoryData ?? []).length > 0
 
   // Derive a stable key from categoryData to avoid re-animating unnecessarily
-  const categoryKey = categoryData
+  const categoryKey = (categoryData ?? [])
     .map(d => `${d.name}:${d.value}`)
     .join(',')
 
@@ -70,20 +71,23 @@ export default function AnalyticsView() {
     import('animejs').then(({ animate, stagger }) => {
       if (cancelled) return
       const bars = container.querySelectorAll('[data-bar]')
-      if (!bars?.length) return
-      animate(Array.from(bars), {
+      if (!bars.length) return
+      bars.forEach(el => { (el as HTMLElement).style.width = '0%' })
+      animRef.current = animate(bars, {
         width: (el: Element) => (el as HTMLElement).getAttribute('data-pct') + '%',
         ease: 'cubicBezier(.34,1.56,.64,1)',
         delay: stagger(60),
         duration: 550,
       })
     })
-    return () => { cancelled = true }
+    return () => {
+      cancelled = true
+      animRef.current?.cancel()
+      animRef.current = null
+    }
   }, [categoryKey])
 
-  const maxAmount = hasData
-    ? Math.max(...categoryData.map(d => d.value))
-    : 1
+  const maxAmount = hasData ? Math.max(...(categoryData ?? []).map(d => d.value), 1) : 1
 
   return (
     <div>
@@ -113,7 +117,7 @@ export default function AnalyticsView() {
                       <div
                         data-bar
                         data-pct={pct}
-                        style={{ width: 0, backgroundColor: color }}
+                        style={{ width: '0%', backgroundColor: color }}
                         className="h-2 rounded-full"
                       />
                     </div>
@@ -127,7 +131,7 @@ export default function AnalyticsView() {
           <div>
             <h2 className="text-base font-semibold text-gray-700 mb-4">6-Month Trend</h2>
             <ResponsiveContainer width="100%" height={180}>
-              <LineChart data={trendData ?? []}>
+              <LineChart data={trendData}>
                 <XAxis dataKey="month" tick={{ fontSize: 11 }} />
                 <YAxis tickFormatter={v => `$${v}`} tick={{ fontSize: 11 }} />
                 <Tooltip formatter={(v: number) => [`$${v.toFixed(2)}`, 'Total']} />
