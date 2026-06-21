@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef } from 'react'
 import {
   BrowserRouter,
   Routes,
@@ -9,8 +9,6 @@ import {
 } from 'react-router-dom'
 import { seedCategories } from './db/db'
 import { useAuth } from './hooks/useAuth'
-import { usePin } from './hooks/usePin'
-import PINScreen from './components/PINScreen'
 import LoginView from './views/LoginView'
 import MonthView from './views/MonthView'
 import HistoryView from './views/HistoryView'
@@ -86,17 +84,7 @@ function MainShell() {
 
 function AppContent() {
   const { user, loading: authLoading } = useAuth()
-  const { hasPin, isLoading: pinLoading, setPin, verifyPin } = usePin()
-  const [unlocked, setUnlocked] = useState(false)
-  const [settingPin, setSettingPin] = useState(false)
 
-  // Reset lock state on user change (sign out / switch account)
-  useEffect(() => {
-    setUnlocked(false)
-    setSettingPin(false)
-  }, [user?.uid])
-
-  // Seed built-in categories after login
   useEffect(() => {
     if (user) seedCategories(user.uid)
   }, [user?.uid])
@@ -111,69 +99,6 @@ function AppContent() {
 
   if (!user) {
     return <LoginView />
-  }
-
-  if (pinLoading) {
-    return (
-      <div className="flex h-screen items-center justify-center text-gray-400">
-        Loading...
-      </div>
-    )
-  }
-
-  if (!hasPin && !unlocked && !settingPin) {
-    return (
-      <div className="flex flex-col items-center justify-center h-screen bg-white px-8">
-        <h1 className="text-2xl font-bold mb-4 text-gray-800">Ledgr</h1>
-        <p className="text-gray-500 mb-8 text-center">
-          Set a 4-digit PIN to protect your data?
-        </p>
-        <button
-          onClick={() => setSettingPin(true)}
-          className="w-full bg-blue-500 text-white py-3 rounded-xl font-semibold mb-3"
-        >
-          Set PIN
-        </button>
-        <button
-          onClick={() => setUnlocked(true)}
-          className="text-gray-400 text-sm"
-        >
-          Skip
-        </button>
-      </div>
-    )
-  }
-
-  if (!hasPin && settingPin) {
-    return (
-      <PINScreen
-        mode="set"
-        onSuccess={async (pin) => {
-          if (!pin) return
-          try {
-            await setPin(pin)
-            setUnlocked(true)
-          } catch {
-            setSettingPin(false)
-            setUnlocked(true)
-          }
-        }}
-        onCancel={() => {
-          setSettingPin(false)
-          setUnlocked(true)
-        }}
-      />
-    )
-  }
-
-  if (hasPin && !unlocked) {
-    return (
-      <PINScreen
-        mode="verify"
-        onVerify={verifyPin}
-        onSuccess={() => setUnlocked(true)}
-      />
-    )
   }
 
   return (

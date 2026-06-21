@@ -1,23 +1,16 @@
 import { useRef, useState } from 'react'
 import { collection, getDocs, doc, writeBatch } from 'firebase/firestore'
 import { useCategories } from '../hooks/useCategories'
-import { usePin } from '../hooks/usePin'
 import { useAuth } from '../hooks/useAuth'
 import { firestore } from '../firebase'
 import { shareCsv } from '../utils/exportCsv'
-import PINScreen from '../components/PINScreen'
 import type { Expense } from '../types'
-
-type PinMode = 'verify-change' | 'verify-remove' | 'set' | null
 
 export default function SettingsView() {
   const { categories, addCategory, deleteCategory } = useCategories()
-  const { hasPin, setPin, verifyPin, removePin } = usePin()
   const { user, logout } = useAuth()
   const uid = user?.uid
   const [newCategory, setNewCategory] = useState('')
-  const [pinMode, setPinMode] = useState<PinMode>(null)
-  const [pinHeading, setPinHeading] = useState<string | undefined>(undefined)
   const [exporting, setExporting] = useState(false)
   const [importing, setImporting] = useState(false)
   const [importMsg, setImportMsg] = useState('')
@@ -93,59 +86,6 @@ export default function SettingsView() {
     }
   }
 
-  if (pinMode === 'verify-change') {
-    return (
-      <PINScreen
-        key="verify-change"
-        mode="verify"
-        onVerify={verifyPin}
-        onSuccess={() => { setPinMode('set'); setPinHeading('New PIN') }}
-        onCancel={() => setPinMode(null)}
-      />
-    )
-  }
-
-  if (pinMode === 'verify-remove') {
-    return (
-      <PINScreen
-        key="verify-remove"
-        mode="verify"
-        onVerify={verifyPin}
-        onSuccess={async () => {
-          try {
-            await removePin()
-          } catch {
-            alert('Failed to remove PIN. Try again.')
-          } finally {
-            setPinMode(null)
-          }
-        }}
-        onCancel={() => setPinMode(null)}
-      />
-    )
-  }
-
-  if (pinMode === 'set') {
-    return (
-      <PINScreen
-        key="set"
-        mode="set"
-        heading={pinHeading}
-        onSuccess={async (pin) => {
-          try {
-            await setPin(pin)
-          } catch {
-            alert('Failed to save PIN. Try again.')
-          } finally {
-            setPinMode(null)
-            setPinHeading(undefined)
-          }
-        }}
-        onCancel={() => { setPinMode(null); setPinHeading(undefined) }}
-      />
-    )
-  }
-
   return (
     <div className="px-4 py-4 space-y-8">
       <h1 className="text-xl font-bold text-gray-800">Settings</h1>
@@ -195,36 +135,6 @@ export default function SettingsView() {
           >
             Add
           </button>
-        </div>
-      </section>
-
-      {/* PIN */}
-      <section>
-        <h2 className="text-base font-semibold text-gray-700 mb-3">Security</h2>
-        <div className="space-y-3">
-          {!hasPin ? (
-            <button
-              onClick={() => setPinMode('set')}
-              className="w-full py-3 bg-blue-500 text-white rounded-xl font-semibold"
-            >
-              Set PIN
-            </button>
-          ) : (
-            <>
-              <button
-                onClick={() => setPinMode('verify-change')}
-                className="w-full py-3 border border-blue-500 text-blue-500 rounded-xl font-semibold"
-              >
-                Change PIN
-              </button>
-              <button
-                onClick={() => setPinMode('verify-remove')}
-                className="w-full py-3 border border-red-300 text-red-400 rounded-xl font-semibold"
-              >
-                Remove PIN
-              </button>
-            </>
-          )}
         </div>
       </section>
 
