@@ -120,7 +120,8 @@ function AppContent() {
             await setPin(pin)
             setUnlocked(true)
           } catch {
-            // IndexedDB write failed — unlock without PIN rather than leaving user stuck
+            // Write failed — clear settingPin so condition !hasPin && settingPin doesn't loop
+            setSettingPin(false)
             setUnlocked(true)
           }
         }}

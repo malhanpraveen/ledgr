@@ -44,6 +44,7 @@ export default function PINScreen({ mode, onVerify, onSuccess, onCancel }: PINSc
           setValue('')
           setError('Incorrect PIN')
         } else {
+          inputRef.current?.blur()
           onSuccess()
         }
         return
@@ -68,6 +69,7 @@ export default function PINScreen({ mode, onVerify, onSuccess, onCancel }: PINSc
         return
       }
 
+      inputRef.current?.blur()  // dismiss keyboard before navigating away
       onSuccess(value)
     } finally {
       isSubmitting.current = false
