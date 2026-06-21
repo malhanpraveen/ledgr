@@ -16,15 +16,12 @@ export async function copyRecurringExpenses(uid: string, month: string): Promise
   if (!existing.empty) return
 
   const prev = prevMonth(month)
-  const prevSnap = await getDocs(query(
-    expensesCol,
-    where('month', '==', prev),
-    where('isRecurring', '==', true),
-  ))
-  if (prevSnap.empty) return
+  const prevSnap = await getDocs(query(expensesCol, where('month', '==', prev)))
+  const recurring = prevSnap.docs.filter(d => d.data().isRecurring === true)
+  if (recurring.length === 0) return
 
   const batch = writeBatch(firestore)
-  prevSnap.docs.forEach(d => {
+  recurring.forEach(d => {
     const e = d.data() as Expense
     const copy: Expense = { ...e, id: generateId(), month, recurringSourceId: e.id }
     batch.set(doc(expensesCol, copy.id), copy)
