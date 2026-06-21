@@ -3,6 +3,7 @@ import type { Expense } from '../types'
 
 interface Props {
   expenses: Expense[]
+  month: string
   onTap: (expense: Expense) => void
 }
 
@@ -14,13 +15,15 @@ function groupByCategory(expenses: Expense[]): Record<string, Expense[]> {
   }, {})
 }
 
-export default function ExpenseList({ expenses, onTap }: Props) {
+export default function ExpenseList({ expenses, month, onTap }: Props) {
   const listRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     const container = listRef.current  // capture before async gap
     if (!container) return
+    let cancelled = false
     import('animejs').then(({ animate, stagger }) => {
+      if (cancelled) return
       const rows = container.querySelectorAll('[data-expense-row]')
       if (!rows.length) return
       animate(Array.from(rows), {
@@ -31,7 +34,8 @@ export default function ExpenseList({ expenses, onTap }: Props) {
         delay: stagger(40),
       })
     })
-  }, [expenses])
+    return () => { cancelled = true }
+  }, [month])
 
   if (expenses.length === 0) {
     return (

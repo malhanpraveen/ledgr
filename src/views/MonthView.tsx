@@ -8,13 +8,15 @@ import type { Expense } from '../types'
 
 type ExpenseFormData = Omit<Expense, 'id' | 'recurringSourceId' | 'month'>
 
-function currentMonthStr(): string {
-  const now = new Date()
-  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
-}
+const MONTH_RE = /^\d{4}-(0[1-9]|1[0-2])$/
 
 function isValidMonthParam(s: string | null): s is string {
-  return typeof s === 'string' && /^\d{4}-\d{2}$/.test(s)
+  return s !== null && MONTH_RE.test(s)
+}
+
+function currentMonthStr(): string {
+  const d = new Date()
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
 }
 
 export default function MonthView() {
@@ -30,6 +32,7 @@ export default function MonthView() {
 
   const totalRef = useRef<HTMLSpanElement>(null)
   const fabRef = useRef<HTMLButtonElement>(null)
+  const animationRef = useRef<{ pause: () => void } | null>(null)
 
   const total = expenses.reduce((sum, e) => sum + e.amount, 0)
 
@@ -45,19 +48,27 @@ export default function MonthView() {
     if (!el) return
     import('animejs').then(({ animate }) => {
       if (!el) return
-      animate({ value: 0 }, {
+      if (animationRef.current) animationRef.current.pause()
+      const anim = animate({ value: 0 }, {
         value: total,
         ease: 'outCubic',
         duration: 600,
-        onUpdate: (anim: { targets: Array<{ value: number }> }) => {
-          if (el) el.textContent = '$' + Number(anim.targets[0].value).toFixed(2)
+        onUpdate: (self: { targets: Array<{ value: number }> }) => {
+          if (el) el.textContent = '$' + self.targets[0].value.toFixed(2)
         },
       })
+      animationRef.current = anim
     })
   }, [total])
 
   function handleMonthChange(newMonth: string) {
-    setSearchParams({ m: newMonth })
+    setModalOpen(false)
+    setEditing(null)
+    setSearchParams(prev => {
+      const next = new URLSearchParams(prev)
+      next.set('m', newMonth)
+      return next
+    })
   }
 
   function handleSave(data: ExpenseFormData) {
@@ -104,11 +115,11 @@ export default function MonthView() {
       <div className="px-4 py-4 border-b">
         <p className="text-sm text-gray-500">Total</p>
         <p className="text-3xl font-bold text-gray-800">
-          <span ref={totalRef}>${total.toFixed(2)}</span>
+          <span ref={totalRef}>$0.00</span>
         </p>
       </div>
 
-      <ExpenseList expenses={expenses} onTap={handleTap} />
+      <ExpenseList expenses={expenses} month={month} onTap={handleTap} />
 
       {/* FAB */}
       <button

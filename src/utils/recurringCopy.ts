@@ -8,6 +8,10 @@ function prevMonth(month: string): string {
 }
 
 export async function copyRecurringExpenses(month: string): Promise<void> {
+  const now = new Date()
+  const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
+  if (month > currentMonth) return  // don't pre-populate future months
+
   await db.transaction('rw', db.expenses, async () => {
     const count = await db.expenses.where('month').equals(month).count()
     if (count > 0) return
