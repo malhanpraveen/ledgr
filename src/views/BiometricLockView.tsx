@@ -8,22 +8,25 @@ interface Props {
 
 export default function BiometricLockView({ onUnlock }: Props) {
   const { user, logout } = useAuth()
-  const { authenticate } = useBiometric(user?.uid)
+  const { authenticate, unregister } = useBiometric(user?.uid)
   const [loading, setLoading] = useState(false)
-  const [failed, setFailed] = useState(false)
+  const [failCount, setFailCount] = useState(0)
 
   async function tryAuth() {
     setLoading(true)
-    setFailed(false)
     const ok = await authenticate()
     setLoading(false)
     if (ok) {
       onUnlock()
     } else {
-      setFailed(true)
+      setFailCount(f => f + 1)
     }
   }
 
+  function resetAndUnlock() {
+    unregister()
+    onUnlock()
+  }
 
   return (
     <div className="flex flex-col items-center justify-center h-screen bg-white px-8">
@@ -39,7 +42,7 @@ export default function BiometricLockView({ onUnlock }: Props) {
       <h1 className="text-xl font-bold text-gray-800 mb-1">Ledgr</h1>
       <p className="text-sm text-gray-400 mb-10">Unlock with Face ID</p>
 
-      {failed && (
+      {failCount > 0 && (
         <p className="text-sm text-red-400 mb-4">Face ID failed — try again</p>
       )}
 
@@ -50,6 +53,15 @@ export default function BiometricLockView({ onUnlock }: Props) {
       >
         {loading ? 'Waiting for Face ID…' : 'Use Face ID'}
       </button>
+
+      {failCount >= 2 && (
+        <button
+          onClick={resetAndUnlock}
+          className="w-full py-3 border border-orange-300 text-orange-400 rounded-xl font-semibold mb-4"
+        >
+          Disable Face ID &amp; Enter
+        </button>
+      )}
 
       <button onClick={logout} className="text-sm text-gray-400">
         Sign out
