@@ -3,8 +3,11 @@ import { db } from '../db/db'
 import { hashPin } from '../utils/hash'
 
 export function usePin() {
-  const pinSetting = useLiveQuery(() => db.settings.get('pinHash'))
-  const isLoading = pinSetting === undefined   // undefined = query not yet resolved
+  // Wrap result so undefined strictly means "query not yet resolved"
+  // (db.settings.get returns undefined for both loading AND no-record-found)
+  const pinResult = useLiveQuery(async () => ({ setting: await db.settings.get('pinHash') }))
+  const isLoading = pinResult === undefined
+  const pinSetting = pinResult?.setting
   const hasPin = Boolean(pinSetting?.value)
 
   async function setPin(pin: string) {
