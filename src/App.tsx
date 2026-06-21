@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import ledgrLogo from './assets/ledgrlogo.png'
 import {
   BrowserRouter,
   Routes,
@@ -45,15 +46,8 @@ function MainShell() {
 
   return (
     <div className="flex flex-col h-screen max-w-md mx-auto bg-white">
-      <header className="flex items-center gap-2.5 px-4 py-3 border-b shrink-0">
-        <div className="w-7 h-7 bg-blue-500 rounded-lg flex items-center justify-center">
-          <svg viewBox="0 0 20 20" className="w-4 h-4 text-white fill-current">
-            <rect x="3" y="4" width="14" height="2" rx="1"/>
-            <rect x="3" y="9" width="10" height="2" rx="1"/>
-            <rect x="3" y="14" width="12" height="2" rx="1"/>
-          </svg>
-        </div>
-        <span className="font-bold text-base tracking-tight text-gray-800">Ledgr</span>
+      <header className="flex items-center gap-2 px-4 py-2 border-b shrink-0">
+        <img src={ledgrLogo} alt="Ledgr" className="h-8 w-auto" />
       </header>
       <main ref={pageRef} className="flex-1 overflow-y-auto pb-16">
         <Routes>
