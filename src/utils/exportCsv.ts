@@ -1,10 +1,16 @@
 import type { Expense } from '../types'
 
+function csvField(value: string): string {
+  if (/[",\n]/.test(value)) {
+    return '"' + value.replace(/"/g, '""') + '"'
+  }
+  return value
+}
+
 export function buildCsvString(expenses: Expense[]): string {
   const header = 'Month,Label,Category,Amount,Recurring'
   const rows = expenses.map(e => {
-    const label = e.label.includes(',') ? `"${e.label}"` : e.label
-    return `${e.month},${label},${e.category},${e.amount.toFixed(2)},${e.isRecurring}`
+    return `${e.month},${csvField(e.label)},${csvField(e.category)},${e.amount.toFixed(2)},${e.isRecurring}`
   })
   return [header, ...rows].join('\n')
 }
@@ -13,8 +19,13 @@ export async function shareCsv(expenses: Expense[]): Promise<void> {
   const csv = buildCsvString(expenses)
   const file = new File([csv], 'expenses.csv', { type: 'text/csv' })
 
-  if (navigator.canShare && navigator.canShare({ files: [file] })) {
-    await navigator.share({ files: [file], title: 'Ledgr Export' })
+  if (navigator.canShare?.({ files: [file] })) {
+    try {
+      await navigator.share({ files: [file], title: 'Ledgr Export' })
+    } catch (err) {
+      if (err instanceof Error && err.name === 'AbortError') return
+      throw err
+    }
     return
   }
 
@@ -23,6 +34,8 @@ export async function shareCsv(expenses: Expense[]): Promise<void> {
   const a = document.createElement('a')
   a.href = url
   a.download = 'expenses.csv'
+  document.body.appendChild(a)
   a.click()
-  URL.revokeObjectURL(url)
+  document.body.removeChild(a)
+  setTimeout(() => URL.revokeObjectURL(url), 100)
 }
