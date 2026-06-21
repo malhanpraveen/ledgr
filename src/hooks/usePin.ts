@@ -12,9 +12,9 @@ export function usePin() {
   }
 
   async function verifyPin(pin: string): Promise<boolean> {
+    if (!pinSetting?.value) return false
     const hash = await hashPin(pin)
-    const stored = await db.settings.get('pinHash')
-    return stored?.value === hash
+    return pinSetting.value === hash
   }
 
   async function removePin() {
