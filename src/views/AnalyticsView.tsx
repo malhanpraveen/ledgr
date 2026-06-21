@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { useLiveQuery } from 'dexie-react-hooks'
+import { collection, onSnapshot } from 'firebase/firestore'
 import {
   LineChart,
   Line,
@@ -8,7 +8,8 @@ import {
   Tooltip,
   ResponsiveContainer,
 } from 'recharts'
-import { db } from '../db/db'
+import { firestore } from '../firebase'
+import { useAuth } from '../hooks/useAuth'
 import MonthPicker from '../components/MonthPicker'
 
 const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899']
@@ -31,41 +32,50 @@ function shortMonthLabel(month: string): string {
 
 export default function AnalyticsView() {
   const [month, setMonth] = useState(currentMonthStr)
+  const { user } = useAuth()
   const containerRef = useRef<HTMLDivElement>(null)
   const animRef = useRef<{ cancel: () => void } | null>(null)
 
-  const categoryData = useLiveQuery(async () => {
-    const expenses = await db.expenses.where('month').equals(month).toArray()
-    const byCategory: Record<string, number> = {}
-    for (const e of expenses) {
-      byCategory[e.category] = (byCategory[e.category] ?? 0) + e.amount
-    }
-    return Object.entries(byCategory)
-      .map(([name, value]) => ({ name, value }))
-      .sort((a, b) => b.value - a.value)
-  }, [month], [])
+  const [categoryData, setCategoryData] = useState<{ name: string; value: number }[]>([])
+  const [trendData, setTrendData] = useState<{ month: string; total: number }[]>([])
 
-  const trendData = useLiveQuery(async () => {
-    const months = Array.from({ length: 6 }, (_, i) => offsetMonth(month, i - 5))
-    return Promise.all(
-      months.map(async m => {
-        const expenses = await db.expenses.where('month').equals(m).toArray()
-        const total = expenses.reduce((sum, e) => sum + e.amount, 0)
-        return { month: shortMonthLabel(m), total }
-      }),
-    )
-  }, [month], [])
+  useEffect(() => {
+    const uid = user?.uid
+    if (!uid) return
+    return onSnapshot(collection(firestore, 'users', uid, 'expenses'), snapshot => {
+      const all = snapshot.docs.map(d => d.data())
 
-  const hasData = (categoryData ?? []).length > 0
+      // Category breakdown for selected month
+      const byCategory: Record<string, number> = {}
+      for (const e of all) {
+        if (e.month !== month) continue
+        byCategory[e.category] = (byCategory[e.category] ?? 0) + e.amount
+      }
+      setCategoryData(
+        Object.entries(byCategory)
+          .map(([name, value]) => ({ name, value }))
+          .sort((a, b) => b.value - a.value),
+      )
 
-  // Derive a stable key from categoryData to avoid re-animating unnecessarily
-  const categoryKey = (categoryData ?? [])
-    .map(d => `${d.name}:${d.value}`)
-    .join(',')
+      // 6-month trend
+      const trendMonths = Array.from({ length: 6 }, (_, i) => offsetMonth(month, i - 5))
+      const byMonth: Record<string, number> = {}
+      for (const e of all) {
+        if (trendMonths.includes(e.month)) {
+          byMonth[e.month] = (byMonth[e.month] ?? 0) + e.amount
+        }
+      }
+      setTrendData(trendMonths.map(m => ({ month: shortMonthLabel(m), total: byMonth[m] ?? 0 })))
+    })
+  }, [user?.uid, month])
+
+  const hasData = categoryData.length > 0
+
+  const categoryKey = categoryData.map(d => `${d.name}:${d.value}`).join(',')
 
   useEffect(() => {
     if (!categoryKey) return
-    const container = containerRef.current  // capture BEFORE async gap
+    const container = containerRef.current
     if (!container) return
     let cancelled = false
     import('animejs').then(({ animate, stagger }) => {
@@ -87,7 +97,7 @@ export default function AnalyticsView() {
     }
   }, [categoryKey])
 
-  const maxAmount = hasData ? Math.max(...(categoryData ?? []).map(d => d.value), 1) : 1
+  const maxAmount = hasData ? Math.max(...categoryData.map(d => d.value), 1) : 1
 
   return (
     <div>
@@ -100,7 +110,6 @@ export default function AnalyticsView() {
         </div>
       ) : (
         <div className="px-4 py-6 space-y-8">
-          {/* Section 1: Custom animated category bar list */}
           <div>
             <h2 className="text-base font-semibold text-gray-700 mb-4">By Category</h2>
             <div ref={containerRef} className="space-y-4">
@@ -127,7 +136,6 @@ export default function AnalyticsView() {
             </div>
           </div>
 
-          {/* Section 2: Recharts 6-month trend line chart */}
           <div>
             <h2 className="text-base font-semibold text-gray-700 mb-4">6-Month Trend</h2>
             <ResponsiveContainer width="100%" height={180}>

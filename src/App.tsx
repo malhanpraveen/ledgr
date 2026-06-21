@@ -8,8 +8,10 @@ import {
   useLocation,
 } from 'react-router-dom'
 import { seedCategories } from './db/db'
+import { useAuth } from './hooks/useAuth'
 import { usePin } from './hooks/usePin'
 import PINScreen from './components/PINScreen'
+import LoginView from './views/LoginView'
 import MonthView from './views/MonthView'
 import HistoryView from './views/HistoryView'
 import AnalyticsView from './views/AnalyticsView'
@@ -28,10 +30,10 @@ function MainShell() {
   const pathname = location.pathname
 
   useEffect(() => {
-    const el = pageRef.current   // capture synchronously before async gap
+    const el = pageRef.current
     if (!el) return
     import('animejs').then(({ animate }) => {
-      if (!el) return              // check again inside .then() (el is from closure)
+      if (!el) return
       animate(el, {
         opacity: [0, 1],
         translateY: [8, 0],
@@ -43,6 +45,16 @@ function MainShell() {
 
   return (
     <div className="flex flex-col h-screen max-w-md mx-auto bg-white">
+      <header className="flex items-center gap-2.5 px-4 py-3 border-b shrink-0">
+        <div className="w-7 h-7 bg-blue-500 rounded-lg flex items-center justify-center">
+          <svg viewBox="0 0 20 20" className="w-4 h-4 text-white fill-current">
+            <rect x="3" y="4" width="14" height="2" rx="1"/>
+            <rect x="3" y="9" width="10" height="2" rx="1"/>
+            <rect x="3" y="14" width="12" height="2" rx="1"/>
+          </svg>
+        </div>
+        <span className="font-bold text-base tracking-tight text-gray-800">Ledgr</span>
+      </header>
       <main ref={pageRef} className="flex-1 overflow-y-auto pb-16">
         <Routes>
           <Route path="/" element={<Navigate to="/month" replace />} />
@@ -73,11 +85,23 @@ function MainShell() {
 }
 
 function AppContent() {
-  const { hasPin, isLoading, setPin, verifyPin } = usePin()
+  const { user, loading: authLoading } = useAuth()
+  const { hasPin, isLoading: pinLoading, setPin, verifyPin } = usePin()
   const [unlocked, setUnlocked] = useState(false)
   const [settingPin, setSettingPin] = useState(false)
 
-  if (isLoading) {
+  // Reset lock state on user change (sign out / switch account)
+  useEffect(() => {
+    setUnlocked(false)
+    setSettingPin(false)
+  }, [user?.uid])
+
+  // Seed built-in categories after login
+  useEffect(() => {
+    if (user) seedCategories(user.uid)
+  }, [user?.uid])
+
+  if (authLoading) {
     return (
       <div className="flex h-screen items-center justify-center text-gray-400">
         Loading...
@@ -85,7 +109,18 @@ function AppContent() {
     )
   }
 
-  // First launch: no PIN stored, not yet unlocked, not actively setting a PIN
+  if (!user) {
+    return <LoginView />
+  }
+
+  if (pinLoading) {
+    return (
+      <div className="flex h-screen items-center justify-center text-gray-400">
+        Loading...
+      </div>
+    )
+  }
+
   if (!hasPin && !unlocked && !settingPin) {
     return (
       <div className="flex flex-col items-center justify-center h-screen bg-white px-8">
@@ -109,7 +144,6 @@ function AppContent() {
     )
   }
 
-  // PIN setup screen
   if (!hasPin && settingPin) {
     return (
       <PINScreen
@@ -120,7 +154,6 @@ function AppContent() {
             await setPin(pin)
             setUnlocked(true)
           } catch {
-            // Write failed — clear settingPin so condition !hasPin && settingPin doesn't loop
             setSettingPin(false)
             setUnlocked(true)
           }
@@ -133,7 +166,6 @@ function AppContent() {
     )
   }
 
-  // PIN verify screen
   if (hasPin && !unlocked) {
     return (
       <PINScreen
@@ -144,7 +176,6 @@ function AppContent() {
     )
   }
 
-  // Main app
   return (
     <BrowserRouter>
       <MainShell />
@@ -153,19 +184,5 @@ function AppContent() {
 }
 
 export default function App() {
-  const [dbReady, setDbReady] = useState(false)
-
-  useEffect(() => {
-    seedCategories().then(() => setDbReady(true))
-  }, [])
-
-  if (!dbReady) {
-    return (
-      <div className="flex h-screen items-center justify-center text-gray-400">
-        Loading...
-      </div>
-    )
-  }
-
   return <AppContent />
 }

@@ -1,12 +1,12 @@
 import { useRef, useState, useEffect } from 'react'
 
 type PINScreenProps =
-  | { mode: 'verify'; onVerify: (pin: string) => Promise<boolean>; onSuccess: () => void; onCancel?: () => void }
-  | { mode: 'set'; onVerify?: never; onSuccess: (pin: string) => void; onCancel?: () => void }
+  | { mode: 'verify'; heading?: string; onVerify: (pin: string) => Promise<boolean>; onSuccess: () => void; onCancel?: () => void }
+  | { mode: 'set'; heading?: string; onVerify?: never; onSuccess: (pin: string) => void; onCancel?: () => void }
 
-export default function PINScreen({ mode, onVerify, onSuccess, onCancel }: PINScreenProps) {
-  const [value, setValue] = useState('')       // current input
-  const [firstPin, setFirstPin] = useState('') // saved after step 1
+export default function PINScreen({ mode, heading, onVerify, onSuccess, onCancel }: PINScreenProps) {
+  const [value, setValue] = useState('')
+  const [firstPin, setFirstPin] = useState('')
   const [step, setStep] = useState<'enter' | 'confirm'>('enter')
   const [error, setError] = useState('')
   const inputRef = useRef<HTMLInputElement>(null)
@@ -55,8 +55,7 @@ export default function PINScreen({ mode, onVerify, onSuccess, onCancel }: PINSc
         setValue('')
         setStep('confirm')
         setError('')
-        // Focus stays on same input element — keyboard stays up
-        inputRef.current?.focus()
+        // onMouseDown=preventDefault on button keeps input focused, so keyboard stays
         return
       }
 
@@ -65,21 +64,21 @@ export default function PINScreen({ mode, onVerify, onSuccess, onCancel }: PINSc
         triggerShake()
         setValue('')
         setError("PINs don't match — try again")
-        inputRef.current?.focus()
         return
       }
 
-      inputRef.current?.blur()  // dismiss keyboard before navigating away
+      inputRef.current?.blur()
       onSuccess(value)
     } finally {
       isSubmitting.current = false
     }
   }
 
+  const baseLabel = heading ?? (mode === 'verify' ? 'Enter PIN' : 'Set PIN')
   const title =
-    mode === 'verify' ? 'Enter PIN'
-    : step === 'confirm' ? 'Confirm PIN'
-    : 'Set PIN'
+    mode === 'verify' ? baseLabel
+    : step === 'confirm' ? `Confirm ${baseLabel}`
+    : baseLabel
 
   const btnLabel =
     mode === 'verify' ? 'Unlock'
@@ -87,14 +86,11 @@ export default function PINScreen({ mode, onVerify, onSuccess, onCancel }: PINSc
     : 'Next'
 
   return (
-    <div
-      className="flex flex-col items-center justify-center h-screen bg-white px-8"
-      onClick={() => inputRef.current?.focus()}
-    >
+    <div className="flex flex-col items-center justify-center h-screen bg-white px-8">
       <h1 className="text-2xl font-bold mb-2 text-gray-800">Ledgr</h1>
       <p className="text-gray-500 mb-8">{title}</p>
 
-      {/* Hidden input — 1×1 so iOS can focus it; font-size 16 prevents zoom */}
+      {/* Hidden 1×1 input — font-size 16 prevents iOS zoom */}
       <input
         ref={inputRef}
         type="tel"
@@ -105,13 +101,20 @@ export default function PINScreen({ mode, onVerify, onSuccess, onCancel }: PINSc
         onChange={handleChange}
         autoComplete="off"
         autoCorrect="off"
-        className="absolute opacity-0 w-px h-px pointer-events-none"
+        className="absolute top-0 left-0 opacity-0 w-px h-px pointer-events-none"
         style={{ fontSize: 16 }}
         aria-label={title}
       />
 
-      {/* 4-dot display — tapping this focuses the hidden input on iOS */}
-      <div ref={pinRowRef} className="flex gap-4 mb-4 cursor-pointer" role="button" tabIndex={-1} onClick={() => inputRef.current?.focus()}>
+      {/* Dot display — tapping focuses hidden input */}
+      <div
+        ref={pinRowRef}
+        className="flex gap-4 mb-4 cursor-pointer"
+        role="button"
+        tabIndex={-1}
+        onMouseDown={(e) => e.preventDefault()}
+        onClick={() => inputRef.current?.focus()}
+      >
         {Array.from({ length: 4 }, (_, i) => (
           <div
             key={i}
@@ -132,7 +135,9 @@ export default function PINScreen({ mode, onVerify, onSuccess, onCancel }: PINSc
         <p className="text-gray-300 text-sm mb-4">tap above to type</p>
       )}
 
+      {/* onMouseDown preventDefault = button click fires but focus never leaves input */}
       <button
+        onMouseDown={(e) => e.preventDefault()}
         onClick={handleSubmit}
         disabled={value.length < 4}
         className="w-full py-3 bg-blue-500 text-white rounded-xl font-semibold disabled:opacity-30 mb-3"
@@ -141,7 +146,11 @@ export default function PINScreen({ mode, onVerify, onSuccess, onCancel }: PINSc
       </button>
 
       {onCancel && (
-        <button onClick={onCancel} className="text-gray-400 text-sm">
+        <button
+          onMouseDown={(e) => e.preventDefault()}
+          onClick={onCancel}
+          className="text-gray-400 text-sm"
+        >
           Cancel
         </button>
       )}

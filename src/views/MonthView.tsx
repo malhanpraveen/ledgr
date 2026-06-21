@@ -36,6 +36,12 @@ export default function MonthView() {
 
   const total = expenses.reduce((sum, e) => sum + e.amount, 0)
 
+  const todayDay = new Date().getDate()
+  const isCurrentMonth = month === currentMonthStr()
+  const remaining = isCurrentMonth
+    ? expenses.filter(e => e.dueDay == null || e.dueDay > todayDay).reduce((sum, e) => sum + e.amount, 0)
+    : 0
+
   // Copy recurring expenses from previous month when month changes
   useEffect(() => {
     copyRecurringFromPrevMonth()
@@ -113,24 +119,34 @@ export default function MonthView() {
     <div className="relative min-h-full">
       <MonthPicker month={month} onChange={handleMonthChange} />
 
-      <div className="px-4 py-4 border-b">
-        <p className="text-sm text-gray-500">Total</p>
-        <p className="text-3xl font-bold text-gray-800">
-          <span ref={totalRef}>$0.00</span>
-        </p>
+      <div className="px-4 py-4 border-b flex items-center justify-between">
+        <div className="flex gap-6">
+          <div>
+            <p className="text-sm text-gray-500">Total</p>
+            <p className="text-3xl font-bold text-gray-800">
+              <span ref={totalRef}>$0.00</span>
+            </p>
+          </div>
+          {isCurrentMonth && remaining > 0 && (
+            <div>
+              <p className="text-sm text-gray-500">Remaining</p>
+              <p className="text-3xl font-bold text-orange-400">
+                ${remaining.toFixed(2)}
+              </p>
+            </div>
+          )}
+        </div>
+        <button
+          ref={fabRef}
+          onClick={handleAdd}
+          className="w-12 h-12 bg-blue-500 text-white text-2xl rounded-full shadow-md flex items-center justify-center active:bg-blue-600"
+          aria-label="Add expense"
+        >
+          +
+        </button>
       </div>
 
       <ExpenseList expenses={expenses} month={month} onTap={handleTap} />
-
-      {/* FAB */}
-      <button
-        ref={fabRef}
-        onClick={handleAdd}
-        className="fixed bottom-20 right-4 w-14 h-14 bg-blue-500 text-white text-3xl rounded-full shadow-lg flex items-center justify-center active:bg-blue-600"
-        aria-label="Add expense"
-      >
-        +
-      </button>
 
       <AddExpenseModal
         open={modalOpen}

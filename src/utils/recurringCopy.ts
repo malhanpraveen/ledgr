@@ -1,5 +1,7 @@
-import { db } from '../db/db'
+import { collection, query, where, getDocs, writeBatch, doc } from 'firebase/firestore'
+import { firestore } from '../firebase'
 import type { Expense } from '../types'
+import { generateId } from './uuid'
 
 function prevMonth(month: string): string {
   const [year, m] = month.split('-').map(Number)
@@ -7,26 +9,29 @@ function prevMonth(month: string): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
 }
 
-export async function copyRecurringExpenses(month: string): Promise<void> {
+export async function copyRecurringExpenses(uid: string, month: string): Promise<void> {
   const now = new Date()
   const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
-  if (month > currentMonth) return  // don't pre-populate future months
+  if (month > currentMonth) return
 
-  await db.transaction('rw', db.expenses, async () => {
-    const count = await db.expenses.where('month').equals(month).count()
-    if (count > 0) return
-    const prev = prevMonth(month)
-    const recurring = await db.expenses
-      .where('month').equals(prev)
-      .filter((e: Expense) => e.isRecurring)
-      .toArray()
-    if (recurring.length === 0) return
-    const copies: Expense[] = recurring.map((e: Expense) => ({
-      ...e,
-      id: crypto.randomUUID(),
-      month,
-      recurringSourceId: e.id,
-    }))
-    await db.expenses.bulkAdd(copies)
+  const expensesCol = collection(firestore, 'users', uid, 'expenses')
+
+  const existing = await getDocs(query(expensesCol, where('month', '==', month)))
+  if (!existing.empty) return
+
+  const prev = prevMonth(month)
+  const prevSnap = await getDocs(query(
+    expensesCol,
+    where('month', '==', prev),
+    where('isRecurring', '==', true),
+  ))
+  if (prevSnap.empty) return
+
+  const batch = writeBatch(firestore)
+  prevSnap.docs.forEach(d => {
+    const e = d.data() as Expense
+    const copy: Expense = { ...e, id: generateId(), month, recurringSourceId: e.id }
+    batch.set(doc(expensesCol, copy.id), copy)
   })
+  await batch.commit()
 }

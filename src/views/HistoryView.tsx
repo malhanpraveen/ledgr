@@ -1,30 +1,38 @@
-import { useEffect, useRef } from 'react'
-import { useLiveQuery } from 'dexie-react-hooks'
+import { useState, useEffect, useRef } from 'react'
+import { collection, onSnapshot } from 'firebase/firestore'
 import { useNavigate } from 'react-router-dom'
-import { db } from '../db/db'
+import { firestore } from '../firebase'
+import { useAuth } from '../hooks/useAuth'
 import { formatMonthLabel } from '../utils/formatMonth'
 
 export default function HistoryView() {
   const navigate = useNavigate()
+  const { user } = useAuth()
   const containerRef = useRef<HTMLDivElement>(null)
+  const [months, setMonths] = useState<{ month: string; total: number }[]>([])
 
-  const months = useLiveQuery(async () => {
-    const all = await db.expenses.toArray()
-    const byMonth: Record<string, number> = {}
-    for (const e of all) {
-      byMonth[e.month] = (byMonth[e.month] ?? 0) + e.amount
-    }
-    return Object.entries(byMonth)
-      .sort(([a], [b]) => b.localeCompare(a))
-      .map(([month, total]) => ({ month, total }))
-  }, [], [])
+  useEffect(() => {
+    const uid = user?.uid
+    if (!uid) return
+    return onSnapshot(collection(firestore, 'users', uid, 'expenses'), snapshot => {
+      const byMonth: Record<string, number> = {}
+      for (const d of snapshot.docs) {
+        const e = d.data()
+        byMonth[e.month] = (byMonth[e.month] ?? 0) + e.amount
+      }
+      setMonths(
+        Object.entries(byMonth)
+          .sort(([a], [b]) => b.localeCompare(a))
+          .map(([month, total]) => ({ month, total })),
+      )
+    })
+  }, [user?.uid])
 
-  // Stable key: only re-fire animation when month keys or totals change
   const monthsKey = months.map(m => `${m.month}:${m.total}`).join(',')
 
   useEffect(() => {
     if (!monthsKey) return
-    const container = containerRef.current  // capture BEFORE async gap
+    const container = containerRef.current
     if (!container) return
     let cancelled = false
     import('animejs').then(({ animate, stagger }) => {

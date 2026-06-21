@@ -6,9 +6,9 @@ type ExpenseFormData = Omit<Expense, 'id' | 'recurringSourceId' | 'month'>
 
 interface AddExpenseModalProps {
   open: boolean
-  initial?: Expense | null       // if set, modal is in edit mode
+  initial?: Expense | null
   onSave: (data: ExpenseFormData) => void
-  onDelete?: () => void          // only shown in edit mode
+  onDelete?: () => void
   onClose: () => void
 }
 
@@ -29,12 +29,23 @@ function ModalForm({ initial, categories, onSave, onDelete, onClose }: ModalForm
     initial ? initial.amount.toString() : ''
   )
   const [isRecurring, setIsRecurring] = useState(() => initial?.isRecurring ?? false)
+  const [dueDay, setDueDay] = useState(() =>
+    initial?.dueDay != null ? String(initial.dueDay) : ''
+  )
+
+  // Keep category in sync if categories load after mount (live query delay)
+  useEffect(() => {
+    if (!category && categories[0]?.name) {
+      setCategory(categories[0].name)
+    }
+  }, [categories, category])
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     const parsed = parseFloat(amount)
     if (!label.trim() || isNaN(parsed) || parsed < 0.01) return
-    onSave({ label: label.trim(), category, amount: parsed, isRecurring })
+    const dueDayNum = dueDay ? Math.min(31, Math.max(1, parseInt(dueDay, 10))) : undefined
+    onSave({ label: label.trim(), category, amount: parsed, isRecurring, dueDay: dueDayNum })
     onClose()
   }
 
@@ -47,7 +58,7 @@ function ModalForm({ initial, categories, onSave, onDelete, onClose }: ModalForm
           placeholder="e.g. Chase Sapphire"
           value={label}
           onChange={e => setLabel(e.target.value)}
-          autoFocus
+          style={{ fontSize: 16 }}
         />
       </div>
       <div>
@@ -56,6 +67,7 @@ function ModalForm({ initial, categories, onSave, onDelete, onClose }: ModalForm
           className="w-full border border-gray-300 rounded-xl px-4 py-3 focus:outline-none focus:border-blue-500"
           value={category}
           onChange={e => setCategory(e.target.value)}
+          style={{ fontSize: 16 }}
         >
           {categories.map(c => (
             <option key={c.id} value={c.name}>{c.name}</option>
@@ -73,8 +85,24 @@ function ModalForm({ initial, categories, onSave, onDelete, onClose }: ModalForm
           step="0.01"
           value={amount}
           onChange={e => setAmount(e.target.value)}
+          style={{ fontSize: 16 }}
         />
       </div>
+      <div>
+        <label className="block text-sm text-gray-600 mb-1">Due day <span className="text-gray-400">(optional)</span></label>
+        <input
+          className="w-full border border-gray-300 rounded-xl px-4 py-3 focus:outline-none focus:border-blue-500"
+          type="number"
+          inputMode="numeric"
+          placeholder="e.g. 15"
+          min="1"
+          max="31"
+          value={dueDay}
+          onChange={e => setDueDay(e.target.value)}
+          style={{ fontSize: 16 }}
+        />
+      </div>
+
       <div className="flex items-center justify-between">
         <label className="text-sm text-gray-600">Recurring monthly</label>
         <button
@@ -112,10 +140,10 @@ export default function AddExpenseModal({ open, initial, onSave, onDelete, onClo
   const { categories } = useCategories()
   const sheetRef = useRef<HTMLDivElement>(null)
 
-  // Slide-up spring animation when modal opens
+  // Slide-up animation on open
   useEffect(() => {
     if (!open) return
-    const el = sheetRef.current   // capture before async gap
+    const el = sheetRef.current
     import('animejs').then(({ animate, createSpring }) => {
       if (!el) return
       animate(el, {
@@ -123,6 +151,27 @@ export default function AddExpenseModal({ open, initial, onSave, onDelete, onClo
         ease: createSpring({ stiffness: 300, damping: 20 }),
       })
     })
+  }, [open])
+
+  // Shrink sheet when iOS keyboard appears so Add button stays reachable
+  useEffect(() => {
+    if (!open) return
+    const vv = window.visualViewport
+    if (!vv) return
+
+    function updateHeight() {
+      if (sheetRef.current) {
+        sheetRef.current.style.maxHeight = `${vv!.height - 16}px`
+      }
+    }
+
+    updateHeight()
+    vv.addEventListener('resize', updateHeight)
+    vv.addEventListener('scroll', updateHeight)
+    return () => {
+      vv.removeEventListener('resize', updateHeight)
+      vv.removeEventListener('scroll', updateHeight)
+    }
   }, [open])
 
   if (!open) return null
@@ -136,20 +185,23 @@ export default function AddExpenseModal({ open, initial, onSave, onDelete, onClo
     >
       <div
         ref={sheetRef}
-        className="bg-white w-full rounded-t-2xl p-6 pb-24 max-w-md mx-auto"
+        className="bg-white w-full rounded-t-2xl max-w-md mx-auto overflow-y-auto"
+        style={{ maxHeight: '90vh' }}
         onClick={e => e.stopPropagation()}
       >
-        <h2 className="text-xl font-bold mb-4 text-gray-800">
-          {initial ? 'Edit Expense' : 'Add Expense'}
-        </h2>
-        <ModalForm
-          key={formKey}
-          initial={initial}
-          categories={categories}
-          onSave={onSave}
-          onDelete={onDelete}
-          onClose={onClose}
-        />
+        <div className="p-6 pb-24">
+          <h2 className="text-xl font-bold mb-4 text-gray-800">
+            {initial ? 'Edit Expense' : 'Add Expense'}
+          </h2>
+          <ModalForm
+            key={formKey}
+            initial={initial}
+            categories={categories}
+            onSave={onSave}
+            onDelete={onDelete}
+            onClose={onClose}
+          />
+        </div>
       </div>
     </div>
   )

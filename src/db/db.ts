@@ -1,24 +1,8 @@
-import Dexie, { type EntityTable } from 'dexie'
-import type { Expense, Category, Setting } from '../types'
+import { doc, setDoc } from 'firebase/firestore'
+import { firestore } from '../firebase'
+import type { Category } from '../types'
 
-class ExpenseTrackerDB extends Dexie {
-  expenses!: EntityTable<Expense, 'id'>
-  categories!: EntityTable<Category, 'id'>
-  settings!: EntityTable<Setting, 'key'>
-
-  constructor() {
-    super('ExpenseTrackerDB')
-    this.version(1).stores({
-      expenses: 'id, month, category',
-      categories: 'id, name',
-      settings: 'key',
-    })
-  }
-}
-
-export const db = new ExpenseTrackerDB()
-
-const BUILT_IN_CATEGORIES: Category[] = [
+export const BUILT_IN_CATEGORIES: Category[] = [
   { id: 'credit_card', name: 'Credit Card', isCustom: false },
   { id: 'mortgage', name: 'Mortgage', isCustom: false },
   { id: 'car', name: 'Car', isCustom: false },
@@ -26,6 +10,10 @@ const BUILT_IN_CATEGORIES: Category[] = [
   { id: 'other', name: 'Other', isCustom: false },
 ]
 
-export async function seedCategories(): Promise<void> {
-  await db.categories.bulkPut(BUILT_IN_CATEGORIES)
+export async function seedCategories(uid: string): Promise<void> {
+  await Promise.all(
+    BUILT_IN_CATEGORIES.map(cat =>
+      setDoc(doc(firestore, 'users', uid, 'categories', cat.id), cat, { merge: true })
+    )
+  )
 }

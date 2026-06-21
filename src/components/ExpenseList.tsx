@@ -7,26 +7,39 @@ interface Props {
   onTap: (expense: Expense) => void
 }
 
-function groupByCategory(expenses: Expense[]): Record<string, Expense[]> {
-  return expenses.reduce<Record<string, Expense[]>>((acc, e) => {
-    if (!acc[e.category]) acc[e.category] = []
-    acc[e.category].push(e)
-    return acc
-  }, {})
+function ordinal(n: number): string {
+  const s = ['th', 'st', 'nd', 'rd']
+  const v = n % 100
+  return n + (s[(v - 20) % 10] ?? s[v] ?? s[0])
+}
+
+function sortByDueDay(expenses: Expense[]): Expense[] {
+  return [...expenses].sort((a, b) => {
+    const da = a.dueDay ?? Infinity
+    const db = b.dueDay ?? Infinity
+    return da - db
+  })
+}
+
+function currentMonthStr(): string {
+  const d = new Date()
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
 }
 
 export default function ExpenseList({ expenses, month, onTap }: Props) {
+  const todayDay = new Date().getDate()
+  const isCurrentMonth = month === currentMonthStr()
   const listRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
-    const container = listRef.current  // capture before async gap
+    const container = listRef.current
     if (!container) return
     let cancelled = false
     import('animejs').then(({ animate, stagger }) => {
       if (cancelled) return
       const rows = container.querySelectorAll('[data-expense-row]')
       if (!rows.length) return
-      animate(Array.from(rows), {
+      animate(rows, {
         opacity: [0, 1],
         translateY: [12, 0],
         ease: 'outCubic',
@@ -47,35 +60,42 @@ export default function ExpenseList({ expenses, month, onTap }: Props) {
     )
   }
 
-  const grouped = groupByCategory(expenses)
+  const sorted = sortByDueDay(expenses)
 
   return (
     <div ref={listRef} className="divide-y divide-gray-100">
-      {Object.entries(grouped).map(([cat, items]) => (
-        <div key={cat}>
-          <div className="px-4 py-2 bg-gray-50 text-xs font-semibold text-gray-500 uppercase tracking-wide">
-            {cat}
-          </div>
-          {items.map(expense => (
-            <button
-              key={expense.id}
-              data-expense-row
-              onClick={() => onTap(expense)}
-              className="w-full flex items-center justify-between px-4 py-4 active:bg-gray-50 text-left"
-            >
-              <div>
-                <p className="font-medium text-gray-800">{expense.label}</p>
-                {expense.isRecurring && (
-                  <p className="text-xs text-blue-400">↻ Recurring</p>
-                )}
-              </div>
-              <span className="font-semibold text-gray-800">
-                ${expense.amount.toFixed(2)}
-              </span>
-            </button>
-          ))}
-        </div>
-      ))}
+      {sorted.map(expense => {
+        const isPaid = isCurrentMonth && expense.dueDay != null && expense.dueDay <= todayDay
+        const isRemaining = isCurrentMonth && (expense.dueDay == null || expense.dueDay > todayDay)
+
+        return (
+          <button
+            key={expense.id}
+            data-expense-row
+            onClick={() => onTap(expense)}
+            className={`w-full flex items-center justify-between px-4 py-3.5 text-left ${
+              isPaid ? 'bg-gray-50 active:bg-gray-100' : 'active:bg-orange-50'
+            }`}
+          >
+            <div>
+              <p className={`text-sm font-medium tracking-tight ${isPaid ? 'text-gray-400' : 'text-gray-700'}`}>
+                {expense.label}
+              </p>
+              <p className="text-xs text-gray-400 mt-0.5 tracking-tight">
+                {expense.category}
+                {expense.dueDay != null && ` · Due ${ordinal(expense.dueDay)}`}
+                {expense.isRecurring && ' · ↻'}
+                {isPaid && ' · Paid'}
+              </p>
+            </div>
+            <span className={`text-sm font-semibold ml-4 tabular-nums tracking-tight ${
+              isPaid ? 'text-gray-300 line-through' : isRemaining ? 'text-orange-500' : 'text-gray-700'
+            }`}>
+              ${expense.amount.toFixed(2)}
+            </span>
+          </button>
+        )
+      })}
     </div>
   )
 }

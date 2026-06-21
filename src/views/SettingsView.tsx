@@ -1,27 +1,83 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
+import { collection, getDocs, doc, writeBatch } from 'firebase/firestore'
 import { useCategories } from '../hooks/useCategories'
 import { usePin } from '../hooks/usePin'
-import { db } from '../db/db'
+import { useAuth } from '../hooks/useAuth'
+import { firestore } from '../firebase'
 import { shareCsv } from '../utils/exportCsv'
 import PINScreen from '../components/PINScreen'
+import type { Expense } from '../types'
 
-type PinMode = 'set' | null
+type PinMode = 'verify-change' | 'verify-remove' | 'set' | null
 
 export default function SettingsView() {
   const { categories, addCategory, deleteCategory } = useCategories()
-  const { hasPin, setPin, removePin } = usePin()
+  const { hasPin, setPin, verifyPin, removePin } = usePin()
+  const { user, logout } = useAuth()
+  const uid = user?.uid
   const [newCategory, setNewCategory] = useState('')
   const [pinMode, setPinMode] = useState<PinMode>(null)
+  const [pinHeading, setPinHeading] = useState<string | undefined>(undefined)
   const [exporting, setExporting] = useState(false)
+  const [importing, setImporting] = useState(false)
+  const [importMsg, setImportMsg] = useState('')
   const [adding, setAdding] = useState(false)
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
-  async function handleExport() {
+  async function handleExportCsv() {
+    if (!uid) return
     setExporting(true)
     try {
-      const all = await db.expenses.toArray()
+      const snapshot = await getDocs(collection(firestore, 'users', uid, 'expenses'))
+      const all = snapshot.docs.map(d => d.data() as Expense)
       await shareCsv(all)
     } finally {
       setExporting(false)
+    }
+  }
+
+  async function handleExportJson() {
+    if (!uid) return
+    const snapshot = await getDocs(collection(firestore, 'users', uid, 'expenses'))
+    const all = snapshot.docs.map(d => d.data())
+    const json = JSON.stringify(all, null, 2)
+    const blob = new Blob([json], { type: 'application/json' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `ledgr-backup-${new Date().toISOString().slice(0, 10)}.json`
+    a.click()
+    URL.revokeObjectURL(url)
+  }
+
+  async function handleImportJson(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file || !uid) return
+    setImporting(true)
+    setImportMsg('')
+    try {
+      const text = await file.text()
+      const data: Expense[] = JSON.parse(text)
+      if (!Array.isArray(data)) throw new Error('Invalid format')
+
+      const snapshot = await getDocs(collection(firestore, 'users', uid, 'expenses'))
+      const existingIds = new Set(snapshot.docs.map(d => d.id))
+      const newExpenses = data.filter(e => e.id && e.label && !existingIds.has(e.id))
+      if (newExpenses.length === 0) {
+        setImportMsg('No new expenses to import.')
+        return
+      }
+      const batch = writeBatch(firestore)
+      newExpenses.forEach(expense => {
+        batch.set(doc(firestore, 'users', uid!, 'expenses', expense.id), expense)
+      })
+      await batch.commit()
+      setImportMsg(`✓ Imported ${newExpenses.length} expense${newExpenses.length > 1 ? 's' : ''}.`)
+    } catch {
+      setImportMsg('Import failed — invalid file.')
+    } finally {
+      setImporting(false)
+      if (fileInputRef.current) fileInputRef.current.value = ''
     }
   }
 
@@ -37,21 +93,29 @@ export default function SettingsView() {
     }
   }
 
-  async function handleRemovePin() {
-    try {
-      await removePin()
-    } catch {
-      alert('Failed to remove PIN. Try again.')
-    }
-  }
-
-  if (pinMode) {
+  if (pinMode === 'verify-change') {
     return (
       <PINScreen
-        mode={pinMode}
-        onSuccess={async (pin) => {
+        key="verify-change"
+        mode="verify"
+        onVerify={verifyPin}
+        onSuccess={() => { setPinMode('set'); setPinHeading('New PIN') }}
+        onCancel={() => setPinMode(null)}
+      />
+    )
+  }
+
+  if (pinMode === 'verify-remove') {
+    return (
+      <PINScreen
+        key="verify-remove"
+        mode="verify"
+        onVerify={verifyPin}
+        onSuccess={async () => {
           try {
-            await setPin(pin)
+            await removePin()
+          } catch {
+            alert('Failed to remove PIN. Try again.')
           } finally {
             setPinMode(null)
           }
@@ -61,9 +125,42 @@ export default function SettingsView() {
     )
   }
 
+  if (pinMode === 'set') {
+    return (
+      <PINScreen
+        key="set"
+        mode="set"
+        heading={pinHeading}
+        onSuccess={async (pin) => {
+          try {
+            await setPin(pin)
+          } catch {
+            alert('Failed to save PIN. Try again.')
+          } finally {
+            setPinMode(null)
+            setPinHeading(undefined)
+          }
+        }}
+        onCancel={() => { setPinMode(null); setPinHeading(undefined) }}
+      />
+    )
+  }
+
   return (
     <div className="px-4 py-4 space-y-8">
       <h1 className="text-xl font-bold text-gray-800">Settings</h1>
+
+      {/* Account */}
+      <section>
+        <h2 className="text-base font-semibold text-gray-700 mb-3">Account</h2>
+        <p className="text-sm text-gray-500 mb-3">{user?.email}</p>
+        <button
+          onClick={logout}
+          className="w-full py-3 border border-red-300 text-red-400 rounded-xl font-semibold"
+        >
+          Sign Out
+        </button>
+      </section>
 
       {/* Categories */}
       <section>
@@ -115,13 +212,13 @@ export default function SettingsView() {
           ) : (
             <>
               <button
-                onClick={() => setPinMode('set')}
+                onClick={() => setPinMode('verify-change')}
                 className="w-full py-3 border border-blue-500 text-blue-500 rounded-xl font-semibold"
               >
                 Change PIN
               </button>
               <button
-                onClick={handleRemovePin}
+                onClick={() => setPinMode('verify-remove')}
                 className="w-full py-3 border border-red-300 text-red-400 rounded-xl font-semibold"
               >
                 Remove PIN
@@ -131,19 +228,48 @@ export default function SettingsView() {
         </div>
       </section>
 
-      {/* Export */}
+      {/* Data */}
       <section>
         <h2 className="text-base font-semibold text-gray-700 mb-3">Data</h2>
-        <button
-          onClick={handleExport}
-          disabled={exporting}
-          className="w-full py-3 bg-green-500 text-white rounded-xl font-semibold disabled:opacity-50"
-        >
-          {exporting ? 'Preparing...' : '📤 Share CSV'}
-        </button>
-        <p className="text-xs text-gray-400 mt-2 text-center">
-          Opens iOS share sheet — choose Mail, AirDrop, or Files
-        </p>
+        <div className="space-y-3">
+          <button
+            onClick={handleExportJson}
+            className="w-full py-3 bg-blue-500 text-white rounded-xl font-semibold"
+          >
+            📦 Export Backup (JSON)
+          </button>
+          <div>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".json,application/json"
+              className="hidden"
+              onChange={handleImportJson}
+            />
+            <button
+              onClick={() => fileInputRef.current?.click()}
+              disabled={importing}
+              className="w-full py-3 border border-blue-500 text-blue-500 rounded-xl font-semibold disabled:opacity-50"
+            >
+              {importing ? 'Importing...' : '📥 Import Backup (JSON)'}
+            </button>
+            {importMsg && (
+              <p className={`text-sm mt-2 text-center ${importMsg.startsWith('✓') ? 'text-green-500' : 'text-red-400'}`}>
+                {importMsg}
+              </p>
+            )}
+          </div>
+          <button
+            onClick={handleExportCsv}
+            disabled={exporting}
+            className="w-full py-3 bg-green-500 text-white rounded-xl font-semibold disabled:opacity-50"
+          >
+            {exporting ? 'Preparing...' : '📤 Share CSV'}
+          </button>
+          <p className="text-xs text-gray-400 text-center">
+            Export JSON on old device → Import JSON on new device
+          </p>
+        </div>
       </section>
     </div>
   )

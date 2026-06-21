@@ -1,28 +1,39 @@
-import { useLiveQuery } from 'dexie-react-hooks'
-import { db } from '../db/db'
+import { useState, useEffect } from 'react'
+import { doc, onSnapshot, setDoc, deleteDoc } from 'firebase/firestore'
+import { firestore } from '../firebase'
+import { useAuth } from './useAuth'
 import { hashPin } from '../utils/hash'
 
 export function usePin() {
-  // Wrap result so undefined strictly means "query not yet resolved"
-  // (db.settings.get returns undefined for both loading AND no-record-found)
-  const pinResult = useLiveQuery(async () => ({ setting: await db.settings.get('pinHash') }))
-  const isLoading = pinResult === undefined
-  const pinSetting = pinResult?.setting
-  const hasPin = Boolean(pinSetting?.value)
+  const { user } = useAuth()
+  const uid = user?.uid ?? null
+  const [pinHash, setPinHash] = useState<string | null | undefined>(undefined)
+
+  useEffect(() => {
+    if (!uid) { setPinHash(null); return }
+    return onSnapshot(doc(firestore, 'users', uid, 'settings', 'pinHash'), snap => {
+      setPinHash(snap.exists() ? (snap.data().value as string) : null)
+    })
+  }, [uid])
+
+  const isLoading = pinHash === undefined
+  const hasPin = Boolean(pinHash)
 
   async function setPin(pin: string) {
+    if (!uid) return
     const hash = await hashPin(pin)
-    await db.settings.put({ key: 'pinHash', value: hash })
+    await setDoc(doc(firestore, 'users', uid, 'settings', 'pinHash'), { value: hash })
   }
 
   async function verifyPin(pin: string): Promise<boolean> {
-    if (!pinSetting?.value) return false
+    if (!pinHash) return false
     const hash = await hashPin(pin)
-    return pinSetting.value === hash
+    return pinHash === hash
   }
 
   async function removePin() {
-    await db.settings.delete('pinHash')
+    if (!uid) return
+    await deleteDoc(doc(firestore, 'users', uid, 'settings', 'pinHash'))
   }
 
   return { hasPin, isLoading, setPin, verifyPin, removePin }
