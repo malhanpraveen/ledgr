@@ -1,12 +1,8 @@
+import { formatMonthLabel } from '../utils/formatMonth'
+
 interface MonthPickerProps {
   month: string        // "YYYY-MM"
   onChange: (month: string) => void
-}
-
-function formatLabel(month: string): string {
-  const [year, m] = month.split('-').map(Number)
-  const date = new Date(year, m - 1, 1)
-  return date.toLocaleString('default', { month: 'long', year: 'numeric' })
 }
 
 function offsetMonth(month: string, delta: number): string {
@@ -25,7 +21,7 @@ export default function MonthPicker({ month, onChange }: MonthPickerProps) {
       >
         ‹
       </button>
-      <span className="font-semibold text-lg">{formatLabel(month)}</span>
+      <span className="font-semibold text-lg">{formatMonthLabel(month)}</span>
       <button
         onClick={() => onChange(offsetMonth(month, 1))}
         className="text-2xl px-2 active:opacity-60"

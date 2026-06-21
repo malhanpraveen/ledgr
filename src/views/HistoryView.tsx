@@ -2,11 +2,7 @@ import { useEffect, useRef } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { useNavigate } from 'react-router-dom'
 import { db } from '../db/db'
-
-function formatMonthLabel(month: string): string {
-  const [year, m] = month.split('-').map(Number)
-  return new Date(year, m - 1, 1).toLocaleString('default', { month: 'long', year: 'numeric' })
-}
+import { formatMonthLabel } from '../utils/formatMonth'
 
 export default function HistoryView() {
   const navigate = useNavigate()
@@ -21,13 +17,20 @@ export default function HistoryView() {
     return Object.entries(byMonth)
       .sort(([a], [b]) => b.localeCompare(a))
       .map(([month, total]) => ({ month, total }))
-  }, [])
+  }, [], [])
 
-  // Stagger month rows in when data changes
+  // Stable key: only re-fire animation when month keys or totals change
+  const monthsKey = months.map(m => `${m.month}:${m.total}`).join(',')
+
   useEffect(() => {
+    if (!monthsKey) return
+    const container = containerRef.current  // capture BEFORE async gap
+    if (!container) return
+    let cancelled = false
     import('animejs').then(({ animate, stagger }) => {
-      const rows = containerRef.current?.querySelectorAll('[data-month-row]')
-      if (!rows?.length) return
+      if (cancelled) return
+      const rows = container.querySelectorAll('[data-month-row]')
+      if (!rows.length) return
       animate(Array.from(rows), {
         opacity: [0, 1],
         translateX: [-12, 0],
@@ -36,9 +39,10 @@ export default function HistoryView() {
         delay: stagger(35),
       })
     })
-  }, [months])
+    return () => { cancelled = true }
+  }, [monthsKey])
 
-  if (!months || months.length === 0) {
+  if (months.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center py-20 text-gray-400">
         <span className="text-5xl mb-4">🗓️</span>
