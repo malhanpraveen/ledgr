@@ -1,36 +1,39 @@
 # Ledgr
 
-A personal expense tracker PWA built for iPhone. Tracks monthly bills — credit cards, mortgage, car, utilities — with due dates and recurring support.
+A personal expense tracker PWA built for iPhone. Tracks monthly bills — credit cards, mortgage, car, utilities — with due dates and recurring support. Data syncs across all devices via Google login.
 
 ## Features
 
+- Google login — data syncs across any browser or device
 - Month-by-month expense view with animated total and remaining balance
 - Due date per expense — list sorted by due day, remaining vs paid color-coded
-- Recurring expenses auto-copied from previous month
-- Analytics view — category breakdown with animated bar chart
-- 4-digit PIN lock (optional)
+- Recurring expenses auto-copied when you navigate to a new month
+- Analytics view — category breakdown with animated bar chart and 6-month trend
+- 4-digit PIN lock (optional, stored per account)
 - Export to CSV (iOS share sheet) or JSON backup
-- Import JSON backup — for migrating between devices or URLs
+- Import JSON backup — for migrating old local data into your account
 - Fully offline after first load (PWA, service worker)
 
 ## User identity / data storage
 
-**There are no accounts.** All data is stored in IndexedDB on the device, scoped to the URL origin:
+Data is tied to your **Google account** via Firebase Auth + Firestore:
 
 | Scenario | Result |
 |---|---|
-| Same device + same URL | Same data ✓ |
-| Different device | Empty — use Export/Import JSON to migrate |
-| Different browser on same device | Empty database |
-| `http://local-ip` vs `https://vercel.app` | Different databases — use Export/Import in Settings |
+| Same Google account, any device/browser | Same data ✓ |
+| Different Google account | Separate data |
+| Not signed in | Login screen |
 
-The PIN is local access control only — not identity, not synced anywhere.
+Each user's data lives at `users/{uid}/*` in Firestore with security rules that prevent cross-user access.
+
+The PIN is an optional local access control layer on top of Google login — stored in your Firestore account, not just the device.
 
 ## Tech stack
 
 - React 19 + TypeScript + Vite
 - Tailwind CSS
-- Dexie.js (IndexedDB)
+- Firebase Auth (Google OAuth)
+- Firebase Firestore (cloud database)
 - Recharts (analytics)
 - Anime.js v4 (animations)
 - vite-plugin-pwa (service worker + offline)
@@ -42,26 +45,38 @@ npm install
 npm run dev
 ```
 
-Preview production build (required for PWA/service worker):
+Requires a `.env.local` file with Firebase config:
 
-```bash
-npm run build
-npm run preview -- --host
+```
+VITE_FIREBASE_API_KEY=
+VITE_FIREBASE_AUTH_DOMAIN=
+VITE_FIREBASE_PROJECT_ID=
+VITE_FIREBASE_STORAGE_BUCKET=
+VITE_FIREBASE_MESSAGING_SENDER_ID=
+VITE_FIREBASE_APP_ID=
 ```
 
-`--host` exposes on local network so iPhone can reach it via `http://192.168.x.x:4173`. Note: service worker and `crypto.subtle` require HTTPS — use the Vercel deployment for full PWA features on iPhone.
+Get these values from Firebase console → Project settings → Your apps → Web app.
 
 ## Deploy to Vercel
 
+Add all 6 `VITE_FIREBASE_*` env vars in Vercel project settings, then:
+
 ```bash
-# Build locally then deploy prebuilt (avoids remote npm install issues with cutting-edge deps)
 vercel build --prod
 vercel deploy --prebuilt --prod
 ```
 
-## Migrate data between URLs
+Builds locally to avoid remote npm install issues with cutting-edge deps (Vite v8, TS 6, React 19).
 
-1. Old URL → Settings → **Export Backup (JSON)**
-2. New URL → Settings → **Import Backup (JSON)** → pick the file
+Also add your Vercel domain to Firebase → Authentication → Settings → Authorized domains.
+
+## Migrate data from old local version
+
+If you had data in the old IndexedDB-based version:
+
+1. Open old version (before logging in) → Settings → **Export Backup (JSON)**
+2. Sign in with Google
+3. Settings → **Import Backup (JSON)** → pick the file
 
 Import skips duplicates, safe to run multiple times.
