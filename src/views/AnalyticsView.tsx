@@ -134,7 +134,7 @@ export default function AnalyticsView() {
               <LineChart data={trendData}>
                 <XAxis dataKey="month" tick={{ fontSize: 11 }} />
                 <YAxis tickFormatter={v => `$${v}`} tick={{ fontSize: 11 }} />
-                <Tooltip formatter={(v: number) => [`$${v.toFixed(2)}`, 'Total']} />
+                <Tooltip formatter={(v) => [`$${Number(v).toFixed(2)}`, 'Total']} />
                 <Line
                   type="monotone"
                   dataKey="total"

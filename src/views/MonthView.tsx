@@ -49,12 +49,13 @@ export default function MonthView() {
     import('animejs').then(({ animate }) => {
       if (!el) return
       if (animationRef.current) animationRef.current.pause()
-      const anim = animate({ value: 0 }, {
+      const counter = { value: 0 }
+      const anim = animate(counter, {
         value: total,
         ease: 'outCubic',
         duration: 600,
-        onUpdate: (self: { targets: Array<{ value: number }> }) => {
-          if (el) el.textContent = '$' + self.targets[0].value.toFixed(2)
+        onUpdate: () => {
+          if (el) el.textContent = '$' + counter.value.toFixed(2)
         },
       })
       animationRef.current = anim
