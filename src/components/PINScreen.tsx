@@ -108,8 +108,8 @@ export default function PINScreen({ mode, onVerify, onSuccess, onCancel }: PINSc
         aria-label={title}
       />
 
-      {/* 4-dot display */}
-      <div ref={pinRowRef} className="flex gap-4 mb-4" onClick={() => inputRef.current?.focus()}>
+      {/* 4-dot display — tapping this focuses the hidden input on iOS */}
+      <div ref={pinRowRef} className="flex gap-4 mb-4 cursor-pointer" role="button" tabIndex={-1} onClick={() => inputRef.current?.focus()}>
         {Array.from({ length: 4 }, (_, i) => (
           <div
             key={i}
@@ -127,7 +127,7 @@ export default function PINScreen({ mode, onVerify, onSuccess, onCancel }: PINSc
       {error ? (
         <p className="text-red-400 text-sm mb-4">{error}</p>
       ) : (
-        <div className="mb-4 h-5" />
+        <p className="text-gray-300 text-sm mb-4">tap above to type</p>
       )}
 
       <button

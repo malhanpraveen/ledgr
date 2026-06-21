@@ -136,7 +136,7 @@ export default function AddExpenseModal({ open, initial, onSave, onDelete, onClo
     >
       <div
         ref={sheetRef}
-        className="bg-white w-full rounded-t-2xl p-6 max-w-md mx-auto"
+        className="bg-white w-full rounded-t-2xl p-6 pb-24 max-w-md mx-auto"
         onClick={e => e.stopPropagation()}
       >
         <h2 className="text-xl font-bold mb-4 text-gray-800">
