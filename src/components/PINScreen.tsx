@@ -5,22 +5,25 @@ type PINScreenProps =
   | { mode: 'set'; onVerify?: never; onSuccess: (pin: string) => void; onCancel?: () => void }
 
 export default function PINScreen({ mode, onVerify, onSuccess, onCancel }: PINScreenProps) {
-  const [digits, setDigits] = useState<string[]>(['', '', '', ''])
-  const [confirmDigits, setConfirmDigits] = useState<string[]>(['', '', '', ''])
+  const [digits, setDigits] = useState('')           // step-1 PIN
+  const [confirmDigits, setConfirmDigits] = useState('')  // step-2 PIN
   const [step, setStep] = useState<'enter' | 'confirm'>('enter')
-  const inputRefs = useRef<(HTMLInputElement | null)[]>([])
+  const inputRef = useRef<HTMLInputElement>(null)
   const pinRowRef = useRef<HTMLDivElement>(null)
   const isSubmitting = useRef(false)
 
+  const active = step === 'confirm' ? confirmDigits : digits
+  const setActive = step === 'confirm' ? setConfirmDigits : setDigits
+
+  // Focus the hidden input immediately on mount and step change
   useEffect(() => {
-    inputRefs.current[0]?.focus()
+    // Small timeout ensures iOS honors focus after re-render
+    const id = setTimeout(() => inputRef.current?.focus(), 50)
+    return () => clearTimeout(id)
   }, [step])
 
-  const activeDigits = step === 'confirm' ? confirmDigits : digits
-  const setActiveDigits = step === 'confirm' ? setConfirmDigits : setDigits
-
   function triggerShake() {
-    const el = pinRowRef.current   // capture before async gap
+    const el = pinRowRef.current
     if (!el) return
     import('animejs').then(({ animate }) => {
       if (!el) return
@@ -32,98 +35,91 @@ export default function PINScreen({ mode, onVerify, onSuccess, onCancel }: PINSc
     })
   }
 
-  function resetDigits() {
-    if (step === 'confirm') {
-      setConfirmDigits(['', '', '', ''])
-    } else {
-      setDigits(['', '', '', ''])
-    }
-    setTimeout(() => inputRefs.current[0]?.focus(), 0)
-  }
-
   async function handleComplete(pin: string) {
     if (isSubmitting.current) return
     isSubmitting.current = true
     try {
       if (mode === 'verify') {
-        if (!onVerify) return
-        const ok = await onVerify(pin)
+        const ok = await onVerify!(pin)
         if (!ok) {
           triggerShake()
-          resetDigits()
+          setActive('')
         } else {
           onSuccess()
         }
         return
       }
 
-      // mode === 'set'
       if (step === 'enter') {
         setStep('confirm')
+        setConfirmDigits('')
         return
       }
 
-      // step === 'confirm'
-      if (pin !== digits.join('')) {
+      // confirm step
+      if (pin !== digits) {
         triggerShake()
-        resetDigits()
+        setConfirmDigits('')
         return
       }
-
       onSuccess(pin)
     } finally {
       isSubmitting.current = false
     }
   }
 
-  function handleDigit(index: number, value: string) {
-    if (!/^\d?$/.test(value)) return
-    const next = [...activeDigits]
-    next[index] = value.slice(-1)
-    setActiveDigits(next)
-    if (value && index < 3) {
-      inputRefs.current[index + 1]?.focus()
-    }
-    if (value && index === 3) {
-      const pin = next.join('')
-      if (pin.length === 4) {
-        void handleComplete(pin)
-      }
-    }
-  }
-
-  function handleKeyDown(index: number, e: React.KeyboardEvent) {
-    if (e.key === 'Backspace' && !activeDigits[index] && index > 0) {
-      inputRefs.current[index - 1]?.focus()
+  function handleChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const val = e.target.value.replace(/\D/g, '').slice(0, 4)
+    setActive(val)
+    if (val.length === 4) {
+      void handleComplete(val)
     }
   }
 
   const title =
-    mode === 'verify'
-      ? 'Enter PIN'
-      : step === 'confirm'
-      ? 'Confirm PIN'
-      : 'Set PIN'
+    mode === 'verify' ? 'Enter PIN'
+    : step === 'confirm' ? 'Confirm PIN'
+    : 'Set PIN'
 
   return (
-    <div className="flex flex-col items-center justify-center h-screen bg-white px-8">
+    <div
+      className="flex flex-col items-center justify-center h-screen bg-white px-8"
+      onClick={() => inputRef.current?.focus()}
+    >
       <h1 className="text-2xl font-bold mb-2 text-gray-800">Ledgr</h1>
       <p className="text-gray-500 mb-8">{title}</p>
-      <div ref={pinRowRef} className="flex gap-4 mb-8">
-        {activeDigits.map((d, i) => (
-          <input
+
+      {/* Hidden input captures actual typing */}
+      <input
+        ref={inputRef}
+        type="tel"
+        inputMode="numeric"
+        pattern="[0-9]*"
+        maxLength={4}
+        value={active}
+        onChange={handleChange}
+        autoComplete="off"
+        autoCorrect="off"
+        className="absolute opacity-0 w-0 h-0"
+        aria-label={title}
+      />
+
+      {/* Visual 4-dot display */}
+      <div ref={pinRowRef} className="flex gap-4 mb-8" onClick={() => inputRef.current?.focus()}>
+        {Array.from({ length: 4 }, (_, i) => (
+          <div
             key={i}
-            ref={el => { inputRefs.current[i] = el }}
-            type="password"
-            inputMode="numeric"
-            maxLength={1}
-            value={d}
-            onChange={e => handleDigit(i, e.target.value)}
-            onKeyDown={e => handleKeyDown(i, e)}
-            className="w-14 h-14 text-center text-2xl font-bold border-2 border-gray-300 rounded-xl focus:border-blue-500 outline-none"
-          />
+            className={`w-14 h-14 rounded-xl border-2 flex items-center justify-center text-2xl font-bold transition-colors ${
+              i < active.length
+                ? 'border-blue-500 bg-blue-50 text-blue-500'
+                : 'border-gray-300 text-gray-200'
+            }`}
+          >
+            {i < active.length ? '●' : '○'}
+          </div>
         ))}
       </div>
+
       {onCancel && (
         <button onClick={onCancel} className="text-gray-400 text-sm">
           Cancel
