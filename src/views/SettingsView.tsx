@@ -2,6 +2,7 @@ import { useRef, useState } from 'react'
 import { collection, getDocs, doc, writeBatch } from 'firebase/firestore'
 import { useCategories } from '../hooks/useCategories'
 import { useAuth } from '../hooks/useAuth'
+import { useBiometric } from '../hooks/useBiometric'
 import { firestore } from '../firebase'
 import { shareCsv } from '../utils/exportCsv'
 import type { Expense } from '../types'
@@ -10,11 +11,13 @@ export default function SettingsView() {
   const { categories, addCategory, deleteCategory } = useCategories()
   const { user, logout } = useAuth()
   const uid = user?.uid
+  const { isRegistered, isSupported, register, unregister } = useBiometric(uid)
   const [newCategory, setNewCategory] = useState('')
   const [exporting, setExporting] = useState(false)
   const [importing, setImporting] = useState(false)
   const [importMsg, setImportMsg] = useState('')
   const [adding, setAdding] = useState(false)
+  const [bioMsg, setBioMsg] = useState('')
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   async function handleExportCsv() {
@@ -137,6 +140,39 @@ export default function SettingsView() {
           </button>
         </div>
       </section>
+
+      {/* Security */}
+      {isSupported && (
+        <section>
+          <h2 className="text-base font-semibold text-gray-700 mb-3">Security</h2>
+          <div className="space-y-3">
+            {isRegistered ? (
+              <button
+                onClick={() => { unregister(); setBioMsg('Face ID disabled.') }}
+                className="w-full py-3 border border-red-300 text-red-400 rounded-xl font-semibold"
+              >
+                Disable Face ID
+              </button>
+            ) : (
+              <button
+                onClick={async () => {
+                  if (!user?.email) return
+                  const ok = await register(user.email)
+                  setBioMsg(ok ? '✓ Face ID enabled' : 'Failed — try again.')
+                }}
+                className="w-full py-3 bg-blue-500 text-white rounded-xl font-semibold"
+              >
+                Enable Face ID
+              </button>
+            )}
+            {bioMsg && (
+              <p className={`text-sm text-center ${bioMsg.startsWith('✓') ? 'text-green-500' : 'text-red-400'}`}>
+                {bioMsg}
+              </p>
+            )}
+          </div>
+        </section>
+      )}
 
       {/* Data */}
       <section>

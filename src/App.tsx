@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import {
   BrowserRouter,
   Routes,
@@ -9,7 +9,9 @@ import {
 } from 'react-router-dom'
 import { seedCategories } from './db/db'
 import { useAuth } from './hooks/useAuth'
+import { useBiometric } from './hooks/useBiometric'
 import LoginView from './views/LoginView'
+import BiometricLockView from './views/BiometricLockView'
 import MonthView from './views/MonthView'
 import HistoryView from './views/HistoryView'
 import AnalyticsView from './views/AnalyticsView'
@@ -84,10 +86,15 @@ function MainShell() {
 
 function AppContent() {
   const { user, loading: authLoading } = useAuth()
+  const { isRegistered } = useBiometric(user?.uid)
+  const [unlocked, setUnlocked] = useState(false)
 
   useEffect(() => {
     if (user) seedCategories(user.uid)
   }, [user?.uid])
+
+  // Reset lock when user changes
+  useEffect(() => { setUnlocked(false) }, [user?.uid])
 
   if (authLoading) {
     return (
@@ -97,8 +104,10 @@ function AppContent() {
     )
   }
 
-  if (!user) {
-    return <LoginView />
+  if (!user) return <LoginView />
+
+  if (isRegistered && !unlocked) {
+    return <BiometricLockView onUnlock={() => setUnlocked(true)} />
   }
 
   return (
