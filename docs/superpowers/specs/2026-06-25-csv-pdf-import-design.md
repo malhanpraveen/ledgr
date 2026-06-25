@@ -1,10 +1,10 @@
-# CSV & PDF Import Design
+# CSV, PDF & Image Import Design
 
 Date: 2026-06-25
 
 ## Overview
 
-Two new import paths in Settings: CSV (manual bulk entry, round-trip with export) and PDF statements (Gemini AI extraction via Vercel serverless function). Export CSV also updated to include `DueDay` column.
+Two new import paths in Settings: CSV (manual bulk entry, round-trip with export) and statement files — PDF or image screenshot (PNG/JPG) — processed via Gemini AI through a Vercel serverless function. Export CSV also updated to include `DueDay` column.
 
 ---
 
@@ -38,16 +38,16 @@ Example rows:
 ### New files
 
 ```
-api/extract-statement.ts        Vercel serverless function — Gemini PDF extraction
+api/extract-statement.ts        Vercel serverless function — Gemini extraction (PDF + images)
 src/utils/importCsv.ts          Pure function: CSV string → parsed expenses + metadata
-src/utils/importPdf.ts          Client util: POST to /api/extract-statement, returns structured data
+src/utils/importStatement.ts    Client util: POST to /api/extract-statement, returns structured data
 ```
 
 ### Modified files
 
 ```
 src/utils/exportCsv.ts          Add DueDay column to buildCsvString
-src/views/SettingsView.tsx      Wire CSV import button + PDF import button + help text
+src/views/SettingsView.tsx      Wire CSV import + statement import (PDF/image) + help text
 ```
 
 ---
@@ -97,19 +97,29 @@ Example:    2026-06,Netflix,Entertainment,15.99,true,5
 
 ---
 
-## PDF Import (`api/extract-statement.ts`)
+## Statement Import (`api/extract-statement.ts`)
 
 Vercel serverless function. API key never leaves server.
 
 **Env var:** `GEMINI_API_KEY` (set in Vercel dashboard + local `.env`, never committed)
 
-**Request:** `POST /api/extract-statement` with `multipart/form-data`, field `file` = PDF blob
+**Accepted file types:** `.pdf`, `.png`, `.jpg`, `.jpeg`
 
-**Flow:**
+**Request:** `POST /api/extract-statement` with `multipart/form-data`, field `file`
+
+**Flow — PDF:**
 1. Upload PDF blob to Gemini Files API (`ai.files.upload`)
-2. Call `ai.models.generateContent` with `gemini-2.0-flash-latest`, `responseMimeType: 'application/json'`, `responseJsonSchema`
+2. Call `ai.models.generateContent` referencing uploaded file URI
 3. Delete uploaded file (`ai.files.delete`)
 4. Return extracted JSON
+
+**Flow — Image (PNG/JPG):**
+1. Read file as base64
+2. Pass inline as `inlineData` part (`{ mimeType, data }`) — no Files API needed
+3. Call `ai.models.generateContent`
+4. Return extracted JSON
+
+Both flows use `gemini-2.0-flash-latest`, `responseMimeType: 'application/json'`, `responseJsonSchema`.
 
 **Response schema:**
 ```typescript
@@ -124,16 +134,16 @@ Vercel serverless function. API key never leaves server.
 ```
 
 **Prompt to Gemini:**
-> Extract billing details from this financial statement. For category, use one of: Credit Card, Mortgage, Car, Other. Set isRecurring to true if this is a regular monthly bill. Return total amount due (not minimum payment).
+> Extract billing details from this financial statement or screenshot. For category, use one of: Credit Card, Mortgage, Car, Other. Set isRecurring to true if this is a regular monthly bill. Return total amount due (not minimum payment).
 
 **Error handling:**
+- Unsupported file type → 400
 - Gemini API error → 500 with `{ error: message }`
-- Invalid PDF → 400
 - Missing env var → 500
 
 ---
 
-## PDF Review Card (SettingsView)
+## Statement Review Card (SettingsView)
 
 After Gemini extraction, before writing to Firestore, show a review card:
 
@@ -149,6 +159,8 @@ After Gemini extraction, before writing to Firestore, show a review card:
 │  [Cancel]    [Save Expense] │
 └─────────────────────────────┘
 ```
+
+UI: single "Import Statement" button accepting `.pdf,.png,.jpg,.jpeg`.
 
 On Save: write to Firestore with `generateId()`, `recurringSourceId: null`.
 
