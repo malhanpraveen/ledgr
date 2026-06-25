@@ -8,9 +8,9 @@ function csvField(value: string): string {
 }
 
 export function buildCsvString(expenses: Expense[]): string {
-  const header = 'Month,Label,Category,Amount,Recurring'
+  const header = 'Month,Label,Category,Amount,Recurring,DueDay'
   const rows = expenses.map(e => {
-    return `${e.month},${csvField(e.label)},${csvField(e.category)},${e.amount.toFixed(2)},${e.isRecurring}`
+    return `${e.month},${csvField(e.label)},${csvField(e.category)},${e.amount.toFixed(2)},${e.isRecurring},${e.dueDay ?? ''}`
   })
   return [header, ...rows].join('\n')
 }
