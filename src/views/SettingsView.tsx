@@ -4,6 +4,8 @@ import { useCategories } from '../hooks/useCategories'
 import { useAuth } from '../hooks/useAuth'
 import { firestore } from '../firebase'
 import { shareCsv } from '../utils/exportCsv'
+import { parseCsv } from '../utils/importCsv'
+import { generateId } from '../utils/uuid'
 import type { Expense } from '../types'
 
 export default function SettingsView() {
@@ -16,6 +18,9 @@ export default function SettingsView() {
   const [importMsg, setImportMsg] = useState('')
   const [adding, setAdding] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const csvFileInputRef = useRef<HTMLInputElement>(null)
+  const [csvImporting, setCsvImporting] = useState(false)
+  const [csvImportMsg, setCsvImportMsg] = useState('')
 
   async function handleExportCsv() {
     if (!uid) return
@@ -71,6 +76,44 @@ export default function SettingsView() {
     } finally {
       setImporting(false)
       if (fileInputRef.current) fileInputRef.current.value = ''
+    }
+  }
+
+  async function handleImportCsv(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file || !uid) return
+    setCsvImporting(true)
+    setCsvImportMsg('')
+    try {
+      const text = await file.text()
+      const existingCats = new Set(categories.map(c => c.name))
+      const { expenses, newCategories, errors } = parseCsv(text, existingCats)
+
+      for (const name of newCategories) {
+        await addCategory(name)
+      }
+
+      if (expenses.length === 0) {
+        setCsvImportMsg(errors.length ? `Import failed: ${errors[0]}` : 'No valid expenses found.')
+        return
+      }
+
+      const batch = writeBatch(firestore)
+      expenses.forEach(data => {
+        const expense: Expense = { ...data, id: generateId(), recurringSourceId: null }
+        batch.set(doc(firestore, 'users', uid!, 'expenses', expense.id), expense)
+      })
+      await batch.commit()
+
+      const catMsg = newCategories.length
+        ? ` (${newCategories.length} new categor${newCategories.length > 1 ? 'ies' : 'y'} created)`
+        : ''
+      setCsvImportMsg(`✓ Imported ${expenses.length} expense${expenses.length > 1 ? 's' : ''}${catMsg}.`)
+    } catch {
+      setCsvImportMsg('Import failed — invalid file.')
+    } finally {
+      setCsvImporting(false)
+      if (csvFileInputRef.current) csvFileInputRef.current.value = ''
     }
   }
 
@@ -168,6 +211,33 @@ export default function SettingsView() {
                 {importMsg}
               </p>
             )}
+          </div>
+          {/* CSV Import */}
+          <div>
+            <input
+              ref={csvFileInputRef}
+              type="file"
+              accept=".csv,text/csv"
+              className="hidden"
+              onChange={handleImportCsv}
+            />
+            <button
+              onClick={() => csvFileInputRef.current?.click()}
+              disabled={csvImporting}
+              className="w-full py-3 border border-green-500 text-green-600 rounded-xl font-semibold disabled:opacity-50"
+            >
+              {csvImporting ? 'Importing...' : '📥 Import CSV'}
+            </button>
+            {csvImportMsg && (
+              <p className={`text-sm mt-2 text-center ${csvImportMsg.startsWith('✓') ? 'text-green-500' : 'text-red-400'}`}>
+                {csvImportMsg}
+              </p>
+            )}
+            <div className="mt-2 p-3 bg-gray-50 rounded-xl">
+              <p className="text-xs text-gray-500 font-mono leading-relaxed whitespace-pre">
+                {'Format:  Month,Label,Category,Amount,Recurring,DueDay\nExample: 2026-06,Netflix,Entertainment,15.99,true,5\n         2026-06,Rent,Other,2000.00,false,'}
+              </p>
+            </div>
           </div>
           <button
             onClick={handleExportCsv}
