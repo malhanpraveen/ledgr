@@ -89,4 +89,18 @@ describe('parseCsv', () => {
     const { expenses } = parseCsv(csv, EXISTING)
     expect(expenses).toHaveLength(1)
   })
+
+  it('skips row with dueDay out of range', () => {
+    const csv = `Month,Label,Category,Amount,Recurring,DueDay\n2026-06,Bad,Other,10,false,99`
+    const { expenses, errors } = parseCsv(csv, EXISTING)
+    expect(expenses).toHaveLength(0)
+    expect(errors[0]).toContain('out of range')
+  })
+
+  it('skips row with invalid month value (month 13)', () => {
+    const csv = `Month,Label,Category,Amount,Recurring,DueDay\n2026-13,Bad,Other,10,false,`
+    const { expenses, errors } = parseCsv(csv, EXISTING)
+    expect(expenses).toHaveLength(0)
+    expect(errors[0]).toContain('invalid month')
+  })
 })

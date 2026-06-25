@@ -127,6 +127,11 @@ export default function SettingsView() {
   async function handleImportStatement(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
     if (!file) return
+    if (file.size > 3_000_000) {
+      setStatementError('File too large — use an image screenshot instead (max 3 MB for PDFs).')
+      if (statementFileInputRef.current) statementFileInputRef.current.value = ''
+      return
+    }
     setStatementLoading(true)
     setStatementData(null)
     setStatementError('')
@@ -157,6 +162,8 @@ export default function SettingsView() {
       }
       await setDoc(doc(firestore, 'users', uid, 'expenses', expense.id), expense)
       setStatementData(null)
+    } catch {
+      setStatementError('Failed to save expense. Please try again.')
     } finally {
       setStatementSaving(false)
     }

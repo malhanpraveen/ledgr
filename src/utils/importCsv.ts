@@ -21,7 +21,7 @@ export function parseCsv(csv: string, existingCategories: Set<string>): ParseCsv
     }
     const [month, label, category, amountStr, recurringStr, dueDayStr] = cols
 
-    if (!/^\d{4}-\d{2}$/.test(month.trim())) {
+    if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(month.trim())) {
       errors.push(`Row ${i + 1}: invalid month "${month}"`)
       continue
     }
@@ -42,6 +42,10 @@ export function parseCsv(csv: string, existingCategories: Set<string>): ParseCsv
     }
 
     const parsedDueDay = dueDayStr?.trim() ? parseInt(dueDayStr.trim(), 10) : NaN
+    if (!isNaN(parsedDueDay) && (parsedDueDay < 1 || parsedDueDay > 31)) {
+      errors.push(`Row ${i + 1}: dueDay "${parsedDueDay}" out of range (1–31)`)
+      continue
+    }
     const dueDay = !isNaN(parsedDueDay) ? parsedDueDay : undefined
 
     expenses.push({

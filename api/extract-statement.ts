@@ -35,7 +35,7 @@ const SCHEMA = {
     },
     category: {
       type: 'string',
-      enum: ['Credit Card', 'Mortgage', 'Car', 'Other'],
+      enum: ['Credit Card', 'Mortgage', 'Car', 'Utilities', 'Other'],
       description: 'Category based on statement type',
     },
   },
@@ -44,7 +44,7 @@ const SCHEMA = {
 
 const PROMPT =
   'Extract billing details from this financial statement or screenshot. ' +
-  'For category choose one of: Credit Card, Mortgage, Car, Other. ' +
+  'For category choose one of: Credit Card, Mortgage, Car, Utilities, Other. ' +
   'Set isRecurring to true for regular monthly bills. ' +
   'Return total amount due, not minimum payment.'
 
@@ -102,6 +102,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       } finally {
         await ai.files.delete({ name: uploaded.name! }).catch(() => {/* ignore delete errors */})
       }
+      // Validate month format
+      const parsedPdf = pdfResult as { month?: string }
+      if (!parsedPdf.month || !/^\d{4}-(0[1-9]|1[0-2])$/.test(parsedPdf.month)) {
+        return res.status(500).json({ error: 'Could not extract a valid billing month from this document.' })
+      }
       return res.status(200).json(pdfResult)
     } else {
       const response = await ai.models.generateContent({
@@ -118,7 +123,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       })
 
       if (!response.text) throw new Error('No content returned from model')
-      return res.status(200).json(JSON.parse(response.text))
+      const result = JSON.parse(response.text)
+      // Validate month format
+      const parsed = result as { month?: string }
+      if (!parsed.month || !/^\d{4}-(0[1-9]|1[0-2])$/.test(parsed.month)) {
+        return res.status(500).json({ error: 'Could not extract a valid billing month from this document.' })
+      }
+      return res.status(200).json(result)
     }
   } catch (err) {
     const msg = err instanceof Error ? err.message : 'Extraction failed'
