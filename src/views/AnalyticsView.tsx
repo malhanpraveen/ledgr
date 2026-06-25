@@ -84,7 +84,7 @@ export default function AnalyticsView() {
       if (!bars.length) return
       bars.forEach(el => { (el as HTMLElement).style.width = '0%' })
       animRef.current = animate(bars, {
-        width: (el: Element) => (el as HTMLElement).getAttribute('data-pct') + '%',
+        width: (el?: HTMLElement | SVGElement | Record<string, unknown>) => (el as HTMLElement).getAttribute('data-pct') + '%',
         ease: 'cubicBezier(.34,1.56,.64,1)',
         delay: stagger(60),
         duration: 550,
