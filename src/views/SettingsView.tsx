@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react'
-import { collection, getDocs, doc, writeBatch } from 'firebase/firestore'
+import { collection, getDocs, doc, writeBatch, setDoc } from 'firebase/firestore'
 import { useCategories } from '../hooks/useCategories'
 import { useAuth } from '../hooks/useAuth'
 import { firestore } from '../firebase'
@@ -7,6 +7,8 @@ import { shareCsv } from '../utils/exportCsv'
 import { parseCsv } from '../utils/importCsv'
 import { generateId } from '../utils/uuid'
 import type { Expense } from '../types'
+import { extractStatement } from '../utils/importStatement'
+import type { StatementData } from '../utils/importStatement'
 
 export default function SettingsView() {
   const { categories, addCategory, deleteCategory } = useCategories()
@@ -21,6 +23,11 @@ export default function SettingsView() {
   const csvFileInputRef = useRef<HTMLInputElement>(null)
   const [csvImporting, setCsvImporting] = useState(false)
   const [csvImportMsg, setCsvImportMsg] = useState('')
+  const statementFileInputRef = useRef<HTMLInputElement>(null)
+  const [statementLoading, setStatementLoading] = useState(false)
+  const [statementData, setStatementData] = useState<StatementData | null>(null)
+  const [statementError, setStatementError] = useState('')
+  const [statementSaving, setStatementSaving] = useState(false)
 
   async function handleExportCsv() {
     if (!uid) return
@@ -114,6 +121,44 @@ export default function SettingsView() {
     } finally {
       setCsvImporting(false)
       if (csvFileInputRef.current) csvFileInputRef.current.value = ''
+    }
+  }
+
+  async function handleImportStatement(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setStatementLoading(true)
+    setStatementData(null)
+    setStatementError('')
+    try {
+      const result = await extractStatement(file)
+      setStatementData(result)
+    } catch (err) {
+      setStatementError(err instanceof Error ? err.message : 'Extraction failed.')
+    } finally {
+      setStatementLoading(false)
+      if (statementFileInputRef.current) statementFileInputRef.current.value = ''
+    }
+  }
+
+  async function handleSaveStatement() {
+    if (!statementData || !uid) return
+    setStatementSaving(true)
+    try {
+      const expense: Expense = {
+        id: generateId(),
+        label: statementData.label,
+        category: statementData.category,
+        amount: statementData.amount,
+        month: statementData.month,
+        ...(statementData.dueDay != null ? { dueDay: statementData.dueDay } : {}),
+        isRecurring: statementData.isRecurring,
+        recurringSourceId: null,
+      }
+      await setDoc(doc(firestore, 'users', uid, 'expenses', expense.id), expense)
+      setStatementData(null)
+    } finally {
+      setStatementSaving(false)
     }
   }
 
@@ -239,6 +284,65 @@ export default function SettingsView() {
               </p>
             </div>
           </div>
+          {/* Statement Import — PDF or image screenshot */}
+          <div>
+            <input
+              ref={statementFileInputRef}
+              type="file"
+              accept=".pdf,.png,.jpg,.jpeg,application/pdf,image/png,image/jpeg"
+              className="hidden"
+              onChange={handleImportStatement}
+            />
+            <button
+              onClick={() => statementFileInputRef.current?.click()}
+              disabled={statementLoading}
+              className="w-full py-3 border border-purple-400 text-purple-600 rounded-xl font-semibold disabled:opacity-50"
+            >
+              {statementLoading ? 'Analysing...' : '🤖 Import Statement (PDF / Screenshot)'}
+            </button>
+            {statementError && (
+              <p className="text-sm mt-2 text-center text-red-400">{statementError}</p>
+            )}
+          </div>
+
+          {statementData && (
+            <div className="border border-purple-200 rounded-xl p-4 space-y-3 bg-purple-50">
+              <p className="text-sm font-semibold text-purple-700">Review before saving</p>
+              <div className="text-sm space-y-1">
+                {(
+                  [
+                    ['Label', statementData.label],
+                    ['Amount', `$${statementData.amount.toFixed(2)}`],
+                    ['Month', statementData.month],
+                    ['Due Day', statementData.dueDay != null ? String(statementData.dueDay) : '—'],
+                    ['Category', statementData.category],
+                    ['Recurring', statementData.isRecurring ? 'Yes' : 'No'],
+                  ] as [string, string][]
+                ).map(([k, v]) => (
+                  <div key={k} className="flex justify-between">
+                    <span className="text-gray-500">{k}</span>
+                    <span className="font-medium text-gray-800">{v}</span>
+                  </div>
+                ))}
+              </div>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setStatementData(null)}
+                  className="flex-1 py-2 border border-gray-300 text-gray-500 rounded-xl text-sm font-semibold"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleSaveStatement}
+                  disabled={statementSaving}
+                  className="flex-1 py-2 bg-purple-500 text-white rounded-xl text-sm font-semibold disabled:opacity-50"
+                >
+                  {statementSaving ? 'Saving...' : 'Save Expense'}
+                </button>
+              </div>
+            </div>
+          )}
+
           <button
             onClick={handleExportCsv}
             disabled={exporting}
