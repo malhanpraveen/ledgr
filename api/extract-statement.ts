@@ -83,22 +83,26 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         config: { mimeType: 'application/pdf' },
       })
 
-      const response = await ai.models.generateContent({
-        model: 'gemini-2.0-flash-latest',
-        contents: [
-          {
-            parts: [
-              { fileData: { fileUri: uploaded.uri, mimeType: 'application/pdf' } },
-              { text: PROMPT },
-            ],
-          },
-        ],
-        config: generateConfig,
-      })
-
-      await ai.files.delete({ name: uploaded.name! })
-
-      return res.status(200).json(JSON.parse(response.text ?? '{}'))
+      let pdfResult: unknown
+      try {
+        const response = await ai.models.generateContent({
+          model: 'gemini-2.0-flash-latest',
+          contents: [
+            {
+              parts: [
+                { fileData: { fileUri: uploaded.uri, mimeType: 'application/pdf' } },
+                { text: PROMPT },
+              ],
+            },
+          ],
+          config: generateConfig,
+        })
+        if (!response.text) throw new Error('No content returned from model')
+        pdfResult = JSON.parse(response.text)
+      } finally {
+        await ai.files.delete({ name: uploaded.name! }).catch(() => {/* ignore delete errors */})
+      }
+      return res.status(200).json(pdfResult)
     } else {
       const response = await ai.models.generateContent({
         model: 'gemini-2.0-flash-latest',
@@ -113,7 +117,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         config: generateConfig,
       })
 
-      return res.status(200).json(JSON.parse(response.text ?? '{}'))
+      if (!response.text) throw new Error('No content returned from model')
+      return res.status(200).json(JSON.parse(response.text))
     }
   } catch (err) {
     const msg = err instanceof Error ? err.message : 'Extraction failed'
